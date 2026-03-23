@@ -209,6 +209,14 @@ export const hubspotClient = {
   },
 
   /**
+   * PUT — usado para crear asociaciones entre objetos CRM.
+   * Ej: PUT /crm/v3/objects/deals/{dealId}/associations/company/{companyId}/deal_to_company
+   */
+  async put<T = unknown>(path: string, data?: unknown, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+    return getInstance().put<T>(path, data, config);
+  },
+
+  /**
    * DELETE — archivar un recurso en HubSpot.
    * Devuelve 204 sin body.
    */

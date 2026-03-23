@@ -285,16 +285,17 @@ export const sapClient = {
   async patchWithETag(path: string, data?: unknown): Promise<AxiosResponse> {
     // Paso 1: GET para obtener ETag
     const getResponse = await getInstance().get(path);
-    const etag = getResponse.headers['etag'];
+    const etag = getResponse.headers['etag']
+      ?? (getResponse.data?.d?.__metadata as { etag?: string } | undefined)?.etag;
 
-    if (!etag) {
-      throw new Error(`[sap.client] No se recibió ETag de SAP para ${path}. No se puede hacer PATCH seguro.`);
-    }
+    // Si SAP no devuelve ETag (ej: BP sin concurrency control), usar '*'
+    // que significa "actualizar sin verificar versión" en OData v2.
+    const ifMatch = etag || '*';
 
     // Paso 2: PATCH con If-Match
     return getInstance().patch(path, data, {
       headers: {
-        'If-Match': etag,
+        'If-Match': ifMatch,
       },
     });
   },

@@ -181,6 +181,20 @@ export function sapDateTimeToMs(
 }
 
 /**
+ * Convierte una fecha ISO de HubSpot (ej: "2025-12-31" o "2025-12-31T00:00:00.000Z")
+ * al formato OData v2 de SAP: "/Date(epoch_ms)/".
+ *
+ * SAP OData v2 usa este formato para campos DateTime.
+ * Retorna undefined si la fecha no es válida.
+ */
+export function isoToSapDate(isoDate: string | undefined): string | undefined {
+  if (!isoDate) return undefined;
+  const date = new Date(isoDate);
+  if (isNaN(date.getTime())) return undefined;
+  return `/Date(${date.getTime()})/`;
+}
+
+/**
  * Convierte SAP LastChangeDateTime (DateTimeOffset) a milisegundos.
  * Formato: "2024-01-15T10:30:00.000Z" o "/Date(epoch)/"
  */
@@ -439,7 +453,9 @@ export function dealToSalesOrder(
   );
 
   // RequestedDeliveryDate: priorizar fecha_de_entrega custom sobre closedate
-  const deliveryDate = props.fecha_de_entrega || props.closedate;
+  // Convertir de ISO (HubSpot) a /Date(epoch)/ (SAP OData v2)
+  const deliveryDateISO = props.fecha_de_entrega || props.closedate;
+  const deliveryDate = isoToSapDate(deliveryDateISO);
 
   // Ítems: al menos un ítem con el material por defecto
   const items: Omit<SapSalesOrderItem, 'SalesOrder'>[] = [];
@@ -482,9 +498,9 @@ export function dealToSalesOrderUpdate(
     update.PurchaseOrderByCustomer = truncate(purchaseOrder, MAX_LENGTHS.PURCHASE_ORDER);
   }
 
-  const deliveryDate = props.fecha_de_entrega || props.closedate;
-  if (deliveryDate !== undefined) {
-    update.RequestedDeliveryDate = deliveryDate;
+  const deliveryDateISO = props.fecha_de_entrega || props.closedate;
+  if (deliveryDateISO !== undefined) {
+    update.RequestedDeliveryDate = isoToSapDate(deliveryDateISO);
   }
 
   if (props.deal_currency_code !== undefined) {
@@ -601,10 +617,17 @@ export function salesOrderToDealUpdate(
 
   if (so.PurchaseOrderByCustomer) props.dealname = so.PurchaseOrderByCustomer;
   if (so.TotalNetAmount) props.amount = so.TotalNetAmount;
-  if (so.RequestedDeliveryDate) props.closedate = so.RequestedDeliveryDate;
+  if (so.RequestedDeliveryDate) {
+    // Convertir /Date(epoch)/ de SAP a ISO para HubSpot
+    const iso = sapDateToISO(so.RequestedDeliveryDate);
+    if (iso) props.closedate = iso.split('T')[0]; // Solo fecha YYYY-MM-DD
+  }
   if (so.TransactionCurrency) props.deal_currency_code = so.TransactionCurrency;
   if (so.CustomerPaymentTerms) props.condicion_de_pago = so.CustomerPaymentTerms;
-  if (so.RequestedDeliveryDate) props.fecha_de_entrega = so.RequestedDeliveryDate;
+  if (so.RequestedDeliveryDate) {
+    const iso = sapDateToISO(so.RequestedDeliveryDate);
+    if (iso) props.fecha_de_entrega = iso.split('T')[0];
+  }
   if (so.PurchaseOrderByCustomer) props.orden_de_compra = so.PurchaseOrderByCustomer;
 
   // Cantidad del primer ítem
