@@ -225,18 +225,27 @@ describe('sapClient', () => {
       expect(response.status).toBe(204);
     });
 
-    it('lanza error si GET no retorna ETag', async () => {
+    it('usa If-Match: * si GET no retorna ETag (BP sin concurrency control)', async () => {
       const instance = mockedInstance;
 
-      // GET sin header ETag
+      // GET sin header ETag (como ocurre con BP en producción)
       instance.get.mockResolvedValueOnce({
         data: { d: {} },
         headers: {}, // sin etag
       });
 
-      await expect(
-        sapClient.patchWithETag('/API_BUSINESS_PARTNER/A_BusinessPartner(\'100000031\')', {}),
-      ).rejects.toThrow('No se recibió ETag');
+      // PATCH debe usar If-Match: *
+      instance.patch.mockResolvedValueOnce({ status: 204, data: undefined });
+
+      await sapClient.patchWithETag('/API_BUSINESS_PARTNER/A_BusinessPartner(\'100000031\')', { FirstName: 'Test' });
+
+      expect(instance.patch).toHaveBeenCalledWith(
+        expect.any(String),
+        { FirstName: 'Test' },
+        expect.objectContaining({
+          headers: expect.objectContaining({ 'If-Match': '*' }),
+        }),
+      );
     });
   });
 

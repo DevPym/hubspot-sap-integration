@@ -13,6 +13,7 @@ import {
   sapDateToISO,
   sapDateTimeToMs,
   sapDateTimeOffsetToMs,
+  isoToSapDate,
   contactToSapBP,
   contactToSapBPUpdate,
   companyToSapBP,
@@ -98,6 +99,23 @@ describe('sapDateToISO', () => {
   it('retorna undefined para formato inválido', () => {
     expect(sapDateToISO(undefined)).toBeUndefined();
     expect(sapDateToISO('2024-01-15')).toBeUndefined();
+  });
+});
+
+describe('isoToSapDate', () => {
+  it('convierte ISO date a /Date(epoch)/', () => {
+    const result = isoToSapDate('2025-12-31');
+    expect(result).toMatch(/^\/Date\(\d+\)\/$/);
+  });
+
+  it('convierte ISO datetime completo', () => {
+    const result = isoToSapDate('2025-12-31T00:00:00.000Z');
+    expect(result).toBe(`/Date(${new Date('2025-12-31T00:00:00.000Z').getTime()})/`);
+  });
+
+  it('retorna undefined para input vacío', () => {
+    expect(isoToSapDate(undefined)).toBeUndefined();
+    expect(isoToSapDate('')).toBeUndefined();
   });
 });
 
@@ -296,13 +314,17 @@ describe('dealToSalesOrder', () => {
     expect(payload.PurchaseOrderByCustomer).toBe('Deal Name');
   });
 
-  it('prioriza fecha_de_entrega sobre closedate', () => {
+  it('prioriza fecha_de_entrega sobre closedate y convierte a /Date()/', () => {
     const payload = dealToSalesOrder({
       closedate: '2024-06-30',
       fecha_de_entrega: '2024-07-15',
     }, '100000030');
 
-    expect(payload.RequestedDeliveryDate).toBe('2024-07-15');
+    expect(payload.RequestedDeliveryDate).toMatch(/^\/Date\(\d+\)\/$/);
+    // Verificar que usó fecha_de_entrega (julio) no closedate (junio)
+    const epochMs = parseInt(payload.RequestedDeliveryDate!.match(/\d+/)![0], 10);
+    const date = new Date(epochMs);
+    expect(date.getUTCMonth()).toBe(6); // Julio = 6 (0-indexed)
   });
 
   it('crea un ítem con material Q01 y unidad L', () => {
@@ -418,6 +440,7 @@ describe('sapBPToCompanyUpdate', () => {
 
 describe('salesOrderToDealUpdate', () => {
   it('transforma Sales Order a properties de Deal', () => {
+    const epoch = new Date('2024-06-30').getTime();
     const props = salesOrderToDealUpdate({
       SalesOrderType: 'OR',
       SalesOrganization: '4601',
@@ -426,7 +449,7 @@ describe('salesOrderToDealUpdate', () => {
       SoldToParty: '100000030',
       PurchaseOrderByCustomer: 'OC-12345',
       TotalNetAmount: '1500000',
-      RequestedDeliveryDate: '2024-06-30',
+      RequestedDeliveryDate: `/Date(${epoch})/`,
       TransactionCurrency: 'CLP',
       to_Item: {
         results: [{ Material: 'Q01', RequestedQuantity: '500', RequestedQuantityUnit: 'L' }],
