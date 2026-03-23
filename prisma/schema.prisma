@@ -1,7 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Prisma schema — hubspot-sap-integration (Química Sur)
+// Documentación: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +8,112 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Tipo de entidad sincronizada entre HubSpot y SAP
+enum EntityType {
+  CONTACT
+  COMPANY
+  DEAL
+}
+
+/// Sistema de origen o destino de una sincronización
+enum SystemSource {
+  HUBSPOT
+  SAP
+}
+
+/// Operación de sincronización realizada
+enum SyncOperation {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+/// Estado de un evento de sincronización
+enum SyncStatus {
+  PENDING
+  IN_FLIGHT
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+// ---------------------------------------------------------------------------
+// Modelos
+// ---------------------------------------------------------------------------
+
+/// Mapa de correspondencia de IDs entre HubSpot y SAP.
+/// También controla el bloqueo anti-bucle durante sincronizaciones activas.
+model IdMap {
+  id              String       @id @default(uuid())
+  entityType      EntityType
+  hubspotId       String       @unique
+  sapId           String       @unique
+  /// true mientras una sync está en curso (mecanismo anti-bucle)
+  syncInProgress  Boolean      @default(false)
+  /// Sistema que inició la sync en curso (null cuando no hay sync activa)
+  syncInitiatedBy SystemSource?
+  /// Timestamp de inicio de la sync activa (null cuando no hay sync activa)
+  syncStartedAt   DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  syncLogs        SyncLog[]
+
+  /// Garantiza unicidad por tipo + ID de HubSpot
+  @@unique([entityType, hubspotId])
+  /// Garantiza unicidad por tipo + ID de SAP
+  @@unique([entityType, sapId])
+  @@map("id_map")
+}
+
+/// Registro de auditoría inmutable de cada evento de sincronización.
+/// No se actualiza — solo se insertan nuevas filas.
+model SyncLog {
+  id              String        @id @default(uuid())
+  /// FK a IdMap (nullable: puede ser null en eventos antes de crear el mapeo)
+  idMapId         String?
+  entityType      EntityType
+  operation       SyncOperation
+  sourceSystem    SystemSource
+  targetSystem    SystemSource
+  status          SyncStatus
+  /// Payload recibido del sistema origen (siempre presente)
+  inboundPayload  Json
+  /// Payload enviado al sistema destino (null si SKIPPED o error antes de construirlo)
+  outboundPayload Json?
+  errorMessage    String?
+  errorCode       String?
+  attemptNumber   Int           @default(1)
+  createdAt       DateTime      @default(now())
+
+  idMap           IdMap?        @relation(fields: [idMapId], references: [id])
+
+  @@map("sync_log")
+}
+
+/// Persistencia de reintentos en PostgreSQL como complemento a BullMQ.
+/// Permite recuperar jobs tras reinicios del worker.
+model RetryJob {
+  id            String    @id @default(uuid())
+  /// ID del job en BullMQ (referencia cruzada)
+  bullmqJobId   String    @unique
+  /// Payload completo del job para reencolar si es necesario
+  payload       Json
+  maxAttempts   Int       @default(5)
+  attemptCount  Int       @default(0)
+  nextRetryAt   DateTime
+  lastError     String?
+  /// true cuando se agotaron todos los intentos
+  exhausted     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("retry_job")
 }
