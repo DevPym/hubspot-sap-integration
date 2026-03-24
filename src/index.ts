@@ -13,6 +13,7 @@ import { env } from './config/env';
 import { errorHandler } from './api/middleware/error.middleware';
 import { createSyncWorker, closeSyncWorker } from './queue/sync.worker';
 import { closeSyncQueue } from './queue/sync.queue';
+import hubspotRoutes from './api/routes/hubspot.routes';
 
 const app = express();
 
@@ -20,6 +21,12 @@ const app = express();
 // Middlewares globales
 // ---------------------------------------------------------------------------
 
+// IMPORTANTE: express.raw() DEBE ir ANTES de express.json() para /webhooks/hubspot.
+// El auth.middleware necesita el body crudo (Buffer) para verificar la firma HMAC.
+// Si express.json() parsea primero, el body ya no es Buffer y la firma falla.
+app.use('/webhooks', express.raw({ type: 'application/json' }));
+
+// Para todas las demás rutas, parsear JSON normalmente
 app.use(express.json());
 
 // ---------------------------------------------------------------------------
@@ -31,8 +38,8 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Webhook routes se montan en Fase 7:
-// app.use('/webhooks', hubspotRoutes);
+// Webhook routes — POST /webhooks/hubspot
+app.use('/webhooks', hubspotRoutes);
 
 // ---------------------------------------------------------------------------
 // Error handler (debe ir DESPUÉS de todas las rutas)

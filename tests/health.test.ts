@@ -17,7 +17,14 @@ vi.mock('../src/queue/sync.worker', () => ({
 }));
 
 vi.mock('../src/queue/sync.queue', () => ({
+  QUEUE_NAME: 'hubspot-sap-sync',
+  syncQueue: { add: vi.fn(), close: vi.fn(), name: 'hubspot-sap-sync' },
+  addSyncJob: vi.fn(),
   closeSyncQueue: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../src/api/middleware/auth.middleware', () => ({
+  verifyHubSpotSignature: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
 import app from '../src/index';
