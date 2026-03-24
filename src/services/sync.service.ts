@@ -306,6 +306,20 @@ async function handleCreate(
   // Crear mapping en id_map
   const newMap = await idMapRepo.create({ entityType, hubspotId, sapId });
 
+  // ⭐ Writeback: guardar id_sap en HubSpot para referencia cruzada
+  try {
+    const hsObjectType = entityType === 'CONTACT' ? 'contacts'
+      : entityType === 'COMPANY' ? 'companies' : 'deals';
+    await hubspotClient.patch(
+      `/crm/v3/objects/${hsObjectType}/${hubspotId}`,
+      { properties: { id_sap: sapId } },
+    );
+    console.log(`[sync] ⭐ Writeback id_sap=${sapId} → HubSpot ${entityType} ${hubspotId}`);
+  } catch (wbError) {
+    // Writeback falla no bloquea la sync principal — solo loguear
+    console.error('[sync] ⚠️ Writeback id_sap falló (no crítico):', wbError instanceof Error ? wbError.message : wbError);
+  }
+
   // Log: SUCCESS
   await syncLogRepo.create({
     idMapId: newMap.id,

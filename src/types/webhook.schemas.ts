@@ -67,8 +67,10 @@ export const webhookEventSchema = z.object({
   /**
    * ID del objeto HubSpot afectado (Contact, Company, Deal).
    * Llega como number en el webhook — convertir a string al usar la API REST.
+   * ⚠️ Opcional: eventos object.associationChange NO envían objectId,
+   * usan fromObjectId/toObjectId en su lugar.
    */
-  objectId: z.number().int(),
+  objectId: z.number().int().optional(),
   /** Sistema que originó el cambio (ej: 'CRM', 'INTEGRATION') */
   changeSource: z.string().optional(),
   /** Nombre de la propiedad modificada — solo en eventos 'propertyChange' */
@@ -86,6 +88,14 @@ export const webhookEventSchema = z.object({
    * HubSpot usa: "0-1"=Contact, "0-2"=Company, "0-3"=Deal
    */
   objectTypeId: z.string().optional(),
+  // --- Campos extra en eventos object.associationChange ---
+  associationType: z.string().optional(),
+  associationCategory: z.string().optional(),
+  associationTypeId: z.number().int().optional(),
+  fromObjectTypeId: z.string().optional(),
+  toObjectTypeId: z.string().optional(),
+  associationRemoved: z.boolean().optional(),
+  isPrimaryAssociation: z.boolean().optional(),
 });
 
 export type WebhookEvent = z.infer<typeof webhookEventSchema>;

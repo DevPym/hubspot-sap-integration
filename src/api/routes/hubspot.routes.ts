@@ -120,9 +120,15 @@ router.post(
           continue;
         }
 
+        // objectId puede ser undefined en eventos associationChange
+        if (!event.objectId) {
+          skipped++;
+          continue;
+        }
+
         // Encolar para procesamiento asíncrono
         await addSyncJob({
-          objectId: String(event.objectId), // webhook envía number, sync.service espera string
+          objectId: String(event.objectId),
           entityType,
           occurredAt: event.occurredAt,
           subscriptionType: event.subscriptionType,

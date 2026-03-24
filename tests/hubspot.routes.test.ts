@@ -161,21 +161,21 @@ describe('POST /webhooks/hubspot', () => {
     expect(mockAddSyncJob).toHaveBeenCalledTimes(1);
   });
 
-  it('rechaza payload vacío con 400', async () => {
+  it('responde 200 a payload vacío para evitar reintentos de HubSpot', async () => {
     const res = await request(app)
       .post('/webhooks/hubspot')
       .send([]);
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
     expect(res.body.error).toBe('Invalid webhook payload');
   });
 
-  it('rechaza payload malformado con 400', async () => {
+  it('responde 200 a payload malformado para evitar reintentos de HubSpot', async () => {
     const res = await request(app)
       .post('/webhooks/hubspot')
       .send([{ foo: 'bar' }]);
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
     expect(res.body.error).toBe('Invalid webhook payload');
   });
 
