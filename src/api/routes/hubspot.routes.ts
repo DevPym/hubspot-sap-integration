@@ -92,8 +92,11 @@ router.post(
       const parseResult = webhookPayloadSchema.safeParse(jsonBody);
 
       if (!parseResult.success) {
+        // Log del payload crudo para diagnosticar qué envía HubSpot
+        console.warn('[webhook] Payload crudo recibido:', JSON.stringify(jsonBody).substring(0, 500));
         console.warn('[webhook] Payload inválido:', parseResult.error.flatten());
-        res.status(400).json({
+        // Responder 200 para que HubSpot deje de reintentar payloads incompatibles
+        res.status(200).json({
           error: 'Invalid webhook payload',
           details: parseResult.error.flatten().fieldErrors,
         });
