@@ -1,5 +1,25 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
+
+// Mock env y BullMQ para que index.ts no falle al importar
+vi.mock('../src/config/env', () => ({
+  env: {
+    PORT: 3000,
+    NODE_ENV: 'test',
+    REDIS_URL: 'redis://localhost:6379',
+    MAX_RETRY_ATTEMPTS: 5,
+  },
+}));
+
+vi.mock('../src/queue/sync.worker', () => ({
+  createSyncWorker: vi.fn(),
+  closeSyncWorker: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../src/queue/sync.queue', () => ({
+  closeSyncQueue: vi.fn().mockResolvedValue(undefined),
+}));
+
 import app from '../src/index';
 
 describe('GET /health', () => {
