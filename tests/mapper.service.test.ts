@@ -300,16 +300,16 @@ describe('dealToSalesOrder', () => {
     expect(payload.SoldToParty).toBe('100000030');
   });
 
-  it('prioriza orden_de_compra sobre dealname', () => {
+  it('prioriza orden_de_compra_o_contratoo sobre dealname', () => {
     const payload = dealToSalesOrder({
       dealname: 'Deal Name',
-      orden_de_compra: 'OC-12345',
+      orden_de_compra_o_contratoo: 'OC-12345',
     }, '100000030');
 
     expect(payload.PurchaseOrderByCustomer).toBe('OC-12345');
   });
 
-  it('usa dealname si orden_de_compra no existe', () => {
+  it('usa dealname si orden_de_compra_o_contratoo no existe', () => {
     const payload = dealToSalesOrder({ dealname: 'Deal Name' }, '100000030');
     expect(payload.PurchaseOrderByCustomer).toBe('Deal Name');
   });
@@ -329,7 +329,7 @@ describe('dealToSalesOrder', () => {
 
   it('crea un ítem con material Q01 y unidad L', () => {
     const payload = dealToSalesOrder({
-      cantidad_producto: '500',
+      cuanto_es_la_cantidad_requerida_del_producto_: '500',
     }, '100000030');
 
     const items = payload.to_Item?.results;
@@ -339,7 +339,7 @@ describe('dealToSalesOrder', () => {
     expect(items?.[0].RequestedQuantityUnit).toBe('L');
   });
 
-  it('usa cantidad_producto=1 por defecto', () => {
+  it('usa cantidad=1 por defecto si cuanto_es_la_cantidad_requerida_del_producto_ no existe', () => {
     const payload = dealToSalesOrder({}, '100000030');
     expect(payload.to_Item?.results?.[0].RequestedQuantity).toBe('1');
   });
@@ -351,10 +351,10 @@ describe('dealToSalesOrder', () => {
 });
 
 describe('dealToSalesOrderUpdate', () => {
-  it('prioriza orden_de_compra sobre dealname en update', () => {
+  it('prioriza orden_de_compra_o_contratoo sobre dealname en update', () => {
     const update = dealToSalesOrderUpdate({
       dealname: 'Old Name',
-      orden_de_compra: 'OC-NEW',
+      orden_de_compra_o_contratoo: 'OC-NEW',
     });
     expect(update.PurchaseOrderByCustomer).toBe('OC-NEW');
   });
@@ -460,7 +460,7 @@ describe('salesOrderToDealUpdate', () => {
     expect(props.amount).toBe('1500000');
     expect(props.closedate).toBe('2024-06-30');
     expect(props.deal_currency_code).toBe('CLP');
-    expect(props.orden_de_compra).toBe('OC-12345');
-    expect(props.cantidad_producto).toBe('500');
+    expect(props.orden_de_compra_o_contratoo).toBe('OC-12345');
+    expect(props.cuanto_es_la_cantidad_requerida_del_producto_).toBe('500');
   });
 });

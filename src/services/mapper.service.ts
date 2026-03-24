@@ -448,7 +448,7 @@ export function dealToSalesOrder(
 ): SapCreateSalesOrderPayload {
   // PurchaseOrderByCustomer: priorizar orden_de_compra custom sobre dealname
   const purchaseOrder = truncate(
-    props.orden_de_compra || props.dealname,
+    props.orden_de_compra_o_contratoo || props.dealname,
     MAX_LENGTHS.PURCHASE_ORDER,
   );
 
@@ -462,7 +462,7 @@ export function dealToSalesOrder(
   items.push({
     SalesOrderItem: '10',
     Material: SAP_CONSTANTS.MATERIAL,
-    RequestedQuantity: props.cantidad_producto || '1',
+    RequestedQuantity: props.cuanto_es_la_cantidad_requerida_del_producto_ || '1',
     RequestedQuantityUnit: SAP_CONSTANTS.MATERIAL_UNIT,
   });
 
@@ -493,7 +493,7 @@ export function dealToSalesOrderUpdate(
 ): SapUpdateSalesOrderPayload {
   const update: SapUpdateSalesOrderPayload = {};
 
-  const purchaseOrder = props.orden_de_compra || props.dealname;
+  const purchaseOrder = props.orden_de_compra_o_contratoo || props.dealname;
   if (purchaseOrder !== undefined) {
     update.PurchaseOrderByCustomer = truncate(purchaseOrder, MAX_LENGTHS.PURCHASE_ORDER);
   }
@@ -628,11 +628,11 @@ export function salesOrderToDealUpdate(
     const iso = sapDateToISO(so.RequestedDeliveryDate);
     if (iso) props.fecha_de_entrega = iso.split('T')[0];
   }
-  if (so.PurchaseOrderByCustomer) props.orden_de_compra = so.PurchaseOrderByCustomer;
+  if (so.PurchaseOrderByCustomer) props.orden_de_compra_o_contratoo = so.PurchaseOrderByCustomer;
 
   // Cantidad del primer ítem
   if (so.to_Item?.results?.[0]?.RequestedQuantity) {
-    props.cantidad_producto = so.to_Item.results[0].RequestedQuantity;
+    props.cuanto_es_la_cantidad_requerida_del_producto_ = so.to_Item.results[0].RequestedQuantity;
   }
 
   return props;

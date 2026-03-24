@@ -10,10 +10,11 @@
  *     Company → usa `hs_lastmodifieddate`
  *     Deal    → usa `hs_lastmodifieddate`
  *
- * Propiedades custom de Química Sur documentadas en CLAUDE.md:
- *   Contact: comuna
- *   Company: comuna, rut, condicion_venta, razon_social, banco_1, banco_2
- *   Deal:    condicion_de_pago, fecha_de_entrega, orden_de_compra, cantidad_producto
+ * Propiedades custom de Química Sur (grupo "quimica_del_sur"):
+ *   Contact: comuna, id_sap
+ *   Company: comuna, rut, condicion_venta, razon_social, rut_representante_legal, id_sap
+ *   Deal:    condicion_de_pago, fecha_de_entrega, orden_de_compra_o_contratoo,
+ *            cuanto_es_la_cantidad_requerida_del_producto_, id_sap
  *
  * ⚠️ Antes de implementar mapper.service.ts (Fase 5) se deben confirmar
  *    las propiedades custom adicionales directamente en HubSpot Properties.
@@ -70,7 +71,6 @@ export interface HubSpotContactProperties {
   email?: string;
   phone?: string;
   mobilephone?: string;
-  fax?: string;
 
   // --- Dirección ---
   address?: string;
@@ -82,16 +82,16 @@ export interface HubSpotContactProperties {
   // --- Información laboral ---
   company?: string;
   jobtitle?: string;
-  salutation?: string;
-  industry?: string;
 
   // --- Timestamp para Last-Write-Wins ---
   /** USAR ESTE para LWW (no hs_lastmodifieddate) */
   lastmodifieddate?: string;
 
-  // --- Propiedades custom Química Sur ---
+  // --- Propiedades custom Química Sur (grupo quimica_del_sur) ---
   /** Nombre de la comuna (distrito) */
   comuna?: string;
+  /** ID del Business Partner en SAP (ej: "100000030") */
+  id_sap?: string;
 }
 
 export type HubSpotContact = HubSpotObject<HubSpotContactProperties>;
@@ -138,7 +138,7 @@ export interface HubSpotCompanyProperties {
   // --- Timestamp para Last-Write-Wins ---
   hs_lastmodifieddate?: string;
 
-  // --- Propiedades custom Química Sur (sincronizadas con SAP) ---
+  // --- Propiedades custom Química Sur (grupo quimica_del_sur) ---
   /** Nombre de la comuna (distrito) */
   comuna?: string;
   /** RUT empresa formato chileno (ej: '12.345.678-9') */
@@ -147,10 +147,10 @@ export interface HubSpotCompanyProperties {
   condicion_venta?: string;
   /** Razón social legal */
   razon_social?: string;
-  /** Banco principal */
-  banco_1?: string;
-  /** Banco secundario */
-  banco_2?: string;
+  /** RUT del representante legal (solo HubSpot, no sincroniza con SAP) */
+  rut_representante_legal?: string;
+  /** ID del Business Partner en SAP (ej: "100000030") */
+  id_sap?: string;
 }
 
 export type HubSpotCompany = HubSpotObject<HubSpotCompanyProperties>;
@@ -195,18 +195,24 @@ export interface HubSpotDealProperties {
   // --- Timestamp para Last-Write-Wins ---
   hs_lastmodifieddate?: string;
 
-  // --- Propiedades custom Química Sur (sincronizadas con SAP) ---
-  /** Término/condición de pago */
+  // --- Propiedades custom Química Sur (grupo quimica_del_sur) ---
+  /** Término/condición de pago (enumeration) */
   condicion_de_pago?: string;
   /** Fecha de entrega (priorizar sobre closedate para SalesOrder) */
   fecha_de_entrega?: string;
   /**
-   * Número de orden de compra del cliente.
-   * ⭐ Priorizar sobre dealname para PurchaseOrderByCustomer en SAP.
+   * Archivo de compra o contrato (tipo file en HubSpot).
+   * ⚠️ Nombre interno real: orden_de_compra_o_contratoo
+   * Se usa el valor como referencia para PurchaseOrderByCustomer en SAP.
    */
-  orden_de_compra?: string;
-  /** Cantidad del producto (ítem principal del SalesOrder) */
-  cantidad_producto?: string;
+  orden_de_compra_o_contratoo?: string;
+  /**
+   * Cantidad requerida del producto (ítem principal del SalesOrder).
+   * ⚠️ Nombre interno real: cuanto_es_la_cantidad_requerida_del_producto_
+   */
+  cuanto_es_la_cantidad_requerida_del_producto_?: string;
+  /** ID del Sales Order en SAP (ej: "50") */
+  id_sap?: string;
 }
 
 export type HubSpotDeal = HubSpotObject<HubSpotDealProperties>;
