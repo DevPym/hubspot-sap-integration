@@ -196,6 +196,84 @@ export function normalizeCountryCode(country: string | undefined): string {
 }
 
 // ---------------------------------------------------------------------------
+// Diccionario Región Chile → Código SAP (ISO 3166-2:CL)
+// ---------------------------------------------------------------------------
+
+/**
+ * SAP requiere códigos de región específicos, no texto libre.
+ * Verificados contra SAP producción (2026-03-24).
+ *
+ * Códigos válidos: AP, TA, AN, AT, CO, VS, RM, LI, ML, NB, AR, LR, LL, AI, MA
+ */
+const REGION_MAP_CL: Record<string, string> = {
+  // Arica y Parinacota (XV)
+  'arica y parinacota': 'AP', 'arica': 'AP', 'ap': 'AP', 'xv': 'AP',
+  // Tarapacá (I)
+  'tarapaca': 'TA', 'tarapacá': 'TA', 'ta': 'TA', 'i': 'TA',
+  // Antofagasta (II)
+  'antofagasta': 'AN', 'an': 'AN', 'ii': 'AN',
+  // Atacama (III)
+  'atacama': 'AT', 'at': 'AT', 'iii': 'AT',
+  // Coquimbo (IV)
+  'coquimbo': 'CO', 'iv': 'CO',
+  // Valparaíso (V)
+  'valparaiso': 'VS', 'valparaíso': 'VS', 'vs': 'VS', 'v': 'VS',
+  // Metropolitana (RM)
+  'metropolitana': 'RM', 'region metropolitana': 'RM', 'santiago': 'RM', 'rm': 'RM', 'xiii': 'RM',
+  // O'Higgins (VI)
+  'ohiggins': 'LI', "o'higgins": 'LI', 'li': 'LI', 'vi': 'LI', 'rancagua': 'LI',
+  // Maule (VII)
+  'maule': 'ML', 'ml': 'ML', 'vii': 'ML',
+  // Ñuble (XVI)
+  'nuble': 'NB', 'ñuble': 'NB', 'nb': 'NB', 'xvi': 'NB',
+  // Biobío (VIII) - SAP no tiene BB, usamos NB (Ñuble) como más cercano o AR
+  'biobio': 'NB', 'bío bío': 'NB', 'biobío': 'NB', 'viii': 'NB',
+  // Araucanía (IX)
+  'araucania': 'AR', 'araucanía': 'AR', 'la araucania': 'AR', 'la araucanía': 'AR', 'ar': 'AR', 'ix': 'AR',
+  // Los Ríos (XIV)
+  'los rios': 'LR', 'los ríos': 'LR', 'lr': 'LR', 'xiv': 'LR',
+  // Los Lagos (X)
+  'los lagos': 'LL', 'll': 'LL', 'x': 'LL',
+  // Aysén (XI)
+  'aysen': 'AI', 'aysén': 'AI', 'ai': 'AI', 'xi': 'AI',
+  // Magallanes (XII)
+  'magallanes': 'MA', 'magallanes y antartica': 'MA', 'ma': 'MA', 'xii': 'MA',
+};
+
+/**
+ * Normaliza una región/estado de HubSpot al código SAP para Chile.
+ * Si el país no es Chile o no se reconoce la región, retorna undefined
+ * (para no enviar Region inválido a SAP).
+ */
+export function normalizeRegionCode(region: string | undefined, country?: string): string | undefined {
+  if (!region) return undefined;
+
+  const trimmed = region.trim();
+  if (!trimmed) return undefined;
+
+  // Solo normalizar para Chile (por ahora)
+  const countryCode = country ? normalizeCountryCode(country) : 'CL';
+  if (countryCode !== 'CL') {
+    // Para otros países, pasar el valor tal cual (puede funcionar o SAP lo rechazará)
+    return trimmed;
+  }
+
+  const normalized = REGION_MAP_CL[trimmed.toLowerCase()];
+  if (normalized) return normalized;
+
+  // Si ya es un código de 2 letras, verificar si es válido
+  if (trimmed.length === 2) {
+    const upper = trimmed.toUpperCase();
+    if (REGION_MAP_CL[trimmed.toLowerCase()]) return REGION_MAP_CL[trimmed.toLowerCase()];
+    // Asumir que es un código válido
+    return upper;
+  }
+
+  console.warn(`[mapper] ⚠️ Región no reconocida: "${region}" — omitiendo. Agregar al diccionario REGION_MAP_CL.`);
+  return undefined; // No enviar Region inválido — SAP rechaza todo el PATCH
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -399,7 +477,7 @@ export function contactToSapBP(
     CityName: props.city,
     PostalCode: props.zip,
     Country: normalizeCountryCode(props.country),
-    Region: props.state,
+    Region: normalizeRegionCode(props.state, props.country),
     District: props.comuna,
     Language: SAP_CONSTANTS.CORRESPONDENCE_LANGUAGE,
   };
@@ -482,7 +560,10 @@ export function extractAddressPayload(
   if ('city' in props && props.city) address.CityName = props.city;
   if ('zip' in props && props.zip) address.PostalCode = props.zip;
   if ('country' in props && props.country) address.Country = normalizeCountryCode(props.country);
-  if ('state' in props && props.state) address.Region = props.state;
+  if ('state' in props && props.state) {
+    const region = normalizeRegionCode(props.state, 'country' in props ? props.country : undefined);
+    if (region) address.Region = region;
+  }
   if ('comuna' in props && props.comuna) address.District = props.comuna;
 
   return address;
@@ -565,7 +646,7 @@ export function companyToSapBP(
     CityName: props.city,
     PostalCode: props.zip,
     Country: normalizeCountryCode(props.country),
-    Region: props.state,
+    Region: normalizeRegionCode(props.state, props.country),
     District: props.comuna,
     Language: SAP_CONSTANTS.CORRESPONDENCE_LANGUAGE,
   };
