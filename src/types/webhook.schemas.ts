@@ -33,6 +33,12 @@ export const subscriptionTypeSchema = z.enum([
   'deal.deletion',
   'deal.propertyChange',
   'deal.associationChange',
+  // Genéricos (HubSpot envía estos para suscripciones tipo object.*)
+  'object.creation',
+  'object.deletion',
+  'object.merge',
+  'object.restore',
+  'object.associationChange',
 ]);
 
 export type SubscriptionType = z.infer<typeof subscriptionTypeSchema>;
@@ -75,6 +81,11 @@ export const webhookEventSchema = z.object({
   fromObjectId: z.number().int().optional(),
   /** ID del objeto destino de la asociación — solo en 'associationChange' */
   toObjectId: z.number().int().optional(),
+  /**
+   * Tipo de objeto — presente en eventos 'object.*' genéricos.
+   * HubSpot usa: "0-1"=Contact, "0-2"=Company, "0-3"=Deal
+   */
+  objectTypeId: z.string().optional(),
 });
 
 export type WebhookEvent = z.infer<typeof webhookEventSchema>;
@@ -95,17 +106,26 @@ export type WebhookPayload = z.infer<typeof webhookPayloadSchema>;
 // Helpers de narrowing por tipo de entidad y operación
 // ---------------------------------------------------------------------------
 
-/** El evento corresponde a un Contact */
+/**
+ * El evento corresponde a un Contact.
+ * Soporta tanto 'contact.propertyChange' como 'object.creation' con objectTypeId='0-1'.
+ */
 export const isContactEvent = (e: WebhookEvent): boolean =>
-  e.subscriptionType.startsWith('contact.');
+  e.subscriptionType.startsWith('contact.') || e.objectTypeId === '0-1';
 
-/** El evento corresponde a una Company */
+/**
+ * El evento corresponde a una Company.
+ * Soporta tanto 'company.propertyChange' como 'object.creation' con objectTypeId='0-2'.
+ */
 export const isCompanyEvent = (e: WebhookEvent): boolean =>
-  e.subscriptionType.startsWith('company.');
+  e.subscriptionType.startsWith('company.') || e.objectTypeId === '0-2';
 
-/** El evento corresponde a un Deal */
+/**
+ * El evento corresponde a un Deal.
+ * Soporta tanto 'deal.propertyChange' como 'object.creation' con objectTypeId='0-3'.
+ */
 export const isDealEvent = (e: WebhookEvent): boolean =>
-  e.subscriptionType.startsWith('deal.');
+  e.subscriptionType.startsWith('deal.') || e.objectTypeId === '0-3';
 
 /** El evento es de creación de objeto */
 export const isCreationEvent = (e: WebhookEvent): boolean =>
@@ -114,6 +134,14 @@ export const isCreationEvent = (e: WebhookEvent): boolean =>
 /** El evento es de eliminación de objeto */
 export const isDeletionEvent = (e: WebhookEvent): boolean =>
   e.subscriptionType.endsWith('.deletion');
+
+/** El evento es de merge — ignorar en v1 */
+export const isMergeEvent = (e: WebhookEvent): boolean =>
+  e.subscriptionType.endsWith('.merge');
+
+/** El evento es de restore — ignorar en v1 */
+export const isRestoreEvent = (e: WebhookEvent): boolean =>
+  e.subscriptionType.endsWith('.restore');
 
 /** El evento es de cambio de propiedad */
 export const isPropertyChangeEvent = (e: WebhookEvent): boolean =>

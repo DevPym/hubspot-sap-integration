@@ -151,7 +151,16 @@ export async function syncHubSpotToSap(event: HubSpotSyncEvent): Promise<SyncRes
       return await handleUpdate(entityType, objectId, occurredAt, existingMap, source, target);
     }
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
+    // Extraer detalle de errores Axios (SAP/HubSpot devuelven info en response.data)
+    let errorMsg = error instanceof Error ? error.message : String(error);
+    if (error && typeof error === 'object' && 'response' in error) {
+      const axiosErr = error as { response?: { status?: number; data?: unknown } };
+      if (axiosErr.response?.data) {
+        const detail = JSON.stringify(axiosErr.response.data);
+        errorMsg += ` | Status: ${axiosErr.response.status} | Detail: ${detail.substring(0, 500)}`;
+        console.error(`[sync] Error detallado:`, detail.substring(0, 1000));
+      }
+    }
 
     // Log de error
     await syncLogRepo.create({

@@ -45,6 +45,8 @@ import {
   isCompanyEvent,
   isDealEvent,
   isDeletionEvent,
+  isMergeEvent,
+  isRestoreEvent,
 } from '../../types/webhook.schemas';
 import { addSyncJob } from '../../queue/sync.queue';
 import type { EntityType } from '../../generated/prisma/client';
@@ -103,8 +105,8 @@ router.post(
       let skipped = 0;
 
       for (const event of events) {
-        // Ignorar deletions (v1 no sincroniza deletes)
-        if (isDeletionEvent(event)) {
+        // Ignorar deletions, merges y restores (v1 no los sincroniza)
+        if (isDeletionEvent(event) || isMergeEvent(event) || isRestoreEvent(event)) {
           skipped++;
           continue;
         }
