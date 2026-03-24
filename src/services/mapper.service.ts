@@ -260,7 +260,7 @@ export function contactToSapBP(
     StreetName: props.address,
     CityName: props.city,
     PostalCode: props.zip,
-    Country: props.country,
+    Country: props.country || 'CL', // Default Chile — Química Sur
     Region: props.state,
     District: props.comuna,
     Language: SAP_CONSTANTS.CORRESPONDENCE_LANGUAGE,
@@ -353,7 +353,7 @@ export function companyToSapBP(
     StreetName: props.address,
     CityName: props.city,
     PostalCode: props.zip,
-    Country: props.country,
+    Country: props.country || 'CL', // Default Chile — Química Sur
     Region: props.state,
     District: props.comuna,
     Language: SAP_CONSTANTS.CORRESPONDENCE_LANGUAGE,
