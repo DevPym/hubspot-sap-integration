@@ -16,6 +16,9 @@ RUN npm ci
 # Copiar código fuente
 COPY . .
 
+# Generar Prisma Client (necesita prisma.config.ts + prisma/schema.prisma)
+RUN npx prisma generate
+
 # Compilar TypeScript → JavaScript en /app/dist
 RUN npm run build
 
@@ -32,7 +35,11 @@ RUN npm ci --omit=dev
 # Copiar el código compilado desde la etapa de build
 COPY --from=builder /app/dist ./dist
 
-# Puerto que usa Express (Railway usa PORT=8080 por defecto)
+# Copiar Prisma schema + config (necesario para runtime de Prisma)
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+
+# Puerto que usa Express (Railway inyecta PORT como env var)
 EXPOSE 8080
 
 # Ejecutar el servidor
