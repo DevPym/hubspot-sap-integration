@@ -39,6 +39,7 @@
  * └─────────────────────────────────────────────────────────────────────────┘
  */
 
+import crypto from 'crypto';
 import { sapClient } from '../adapters/sap/sap.client';
 import { hubspotClient } from '../adapters/hubspot/hubspot.client';
 import * as mapper from './mapper.service';
@@ -71,6 +72,34 @@ const SAP_SO_ENDPOINT = '/API_SALES_ORDER_SRV/A_SalesOrder';
 let pollerInterval: ReturnType<typeof setInterval> | null = null;
 let lastPollTime: Date = new Date(Date.now() - (POLL_INTERVAL_MS || 300000)); // Iniciar desde hace 1 intervalo
 let isPolling = false;
+
+/**
+ * Cache de hashes de datos sincronizados.
+ * Clave: "entityType-sapId", Valor: hash MD5 de los datos.
+ * Si el hash no cambió desde la última sync, no se reenvía a HubSpot.
+ * Evita el bucle suave: poller→HubSpot→webhook→SAP→poller...
+ */
+const dataHashCache = new Map<string, string>();
+
+/**
+ * Calcula un hash MD5 de un objeto para detectar cambios reales.
+ */
+function hashData(data: Record<string, unknown>): string {
+  const sorted = JSON.stringify(data, Object.keys(data).sort());
+  return crypto.createHash('md5').update(sorted).digest('hex');
+}
+
+/**
+ * Verifica si los datos han cambiado desde la última sincronización.
+ * Retorna true si hay cambios (o si es la primera vez).
+ */
+function hasDataChanged(cacheKey: string, newData: Record<string, unknown>): boolean {
+  const newHash = hashData(newData);
+  const oldHash = dataHashCache.get(cacheKey);
+  if (oldHash === newHash) return false;
+  dataHashCache.set(cacheKey, newHash);
+  return true;
+}
 
 // ---------------------------------------------------------------------------
 // Helper JSON seguro
@@ -184,49 +213,60 @@ async function syncBPToHubSpot(bp: SapBusinessPartner): Promise<void> {
     }
   }
 
+  // Comparar timestamps: si SAP no cambió después de nuestro último update, ignorar
+  if (bp.LastChangeDate) {
+    const sapChangeMatch = bp.LastChangeDate.match(/\/Date\((\d+)\)\//);
+    if (sapChangeMatch) {
+      const sapChangeMs = parseInt(sapChangeMatch[1], 10);
+      const ourLastUpdate = mapping.updatedAt.getTime();
+      if (sapChangeMs <= ourLastUpdate) {
+        return; // SAP no cambió después de nuestra última sync
+      }
+    }
+  }
+
+  // Leer datos completos del BP (incluyendo address)
+  let address: SapBPAddress | undefined;
+
+  try {
+    const addrRes = await sapClient.get<ODataListResponse<SapBPAddress>>(
+      `${SAP_BP_ENDPOINT}('${sapId}')/to_BusinessPartnerAddress`,
+    );
+    if (addrRes.data.d.results?.length > 0) {
+      address = addrRes.data.d.results[0];
+    }
+  } catch { /* Address puede no existir */ }
+
+  // Transformar según tipo
+  let hubspotProps: Record<string, string>;
+  let hsObjectType: string;
+
+  if (entityType === 'CONTACT') {
+    hubspotProps = mapper.sapBPToContactUpdate(bp, address) as Record<string, string>;
+    hsObjectType = 'contacts';
+  } else {
+    hubspotProps = mapper.sapBPToCompanyUpdate(bp, address) as Record<string, string>;
+    hsObjectType = 'companies';
+  }
+
+  // Filtrar undefined/null
+  const cleanProps: Record<string, string> = {};
+  for (const [key, val] of Object.entries(hubspotProps)) {
+    if (val !== undefined && val !== null) cleanProps[key] = val;
+  }
+
+  if (Object.keys(cleanProps).length === 0) return;
+
+  // Deduplicación por hash: si los datos no cambiaron realmente, no reenviar
+  const cacheKey = `${entityType}-${sapId}`;
+  if (!hasDataChanged(cacheKey, cleanProps)) {
+    return; // Datos idénticos al último sync — ignorar
+  }
+
   // Activar lock anti-bucle
   await idMapRepo.acquireSyncLock(mapping.id, 'SAP');
 
   try {
-    // Leer datos completos del BP (incluyendo address)
-    let address: SapBPAddress | undefined;
-    let email: string | undefined;
-    let phone: string | undefined;
-    let mobile: string | undefined;
-    let rut: string | undefined;
-
-    try {
-      const addrRes = await sapClient.get<ODataListResponse<SapBPAddress>>(
-        `${SAP_BP_ENDPOINT}('${sapId}')/to_BusinessPartnerAddress`,
-      );
-      if (addrRes.data.d.results?.length > 0) {
-        address = addrRes.data.d.results[0];
-      }
-    } catch { /* Address puede no existir */ }
-
-    // Transformar según tipo
-    let hubspotProps: Record<string, string>;
-    let hsObjectType: string;
-
-    if (entityType === 'CONTACT') {
-      hubspotProps = mapper.sapBPToContactUpdate(bp, address, email, phone, mobile) as Record<string, string>;
-      hsObjectType = 'contacts';
-    } else {
-      hubspotProps = mapper.sapBPToCompanyUpdate(bp, address, phone, rut) as Record<string, string>;
-      hsObjectType = 'companies';
-    }
-
-    // Filtrar undefined/null
-    const cleanProps: Record<string, string> = {};
-    for (const [key, val] of Object.entries(hubspotProps)) {
-      if (val !== undefined && val !== null) cleanProps[key] = val;
-    }
-
-    if (Object.keys(cleanProps).length === 0) {
-      await idMapRepo.releaseSyncLock(mapping.id);
-      return;
-    }
-
     // PATCH en HubSpot
     await hubspotClient.patch(
       `/crm/v3/objects/${hsObjectType}/${mapping.hubspotId}`,
@@ -287,21 +327,22 @@ async function syncSalesOrderToHubSpot(so: SapSalesOrder): Promise<void> {
     }
   }
 
+  const hubspotProps = mapper.salesOrderToDealUpdate(so) as Record<string, string>;
+
+  const cleanProps: Record<string, string> = {};
+  for (const [key, val] of Object.entries(hubspotProps)) {
+    if (val !== undefined && val !== null) cleanProps[key] = val;
+  }
+
+  if (Object.keys(cleanProps).length === 0) return;
+
+  // Deduplicación por hash
+  const cacheKey = `DEAL-${sapId}`;
+  if (!hasDataChanged(cacheKey, cleanProps)) return;
+
   await idMapRepo.acquireSyncLock(mapping.id, 'SAP');
 
   try {
-    const hubspotProps = mapper.salesOrderToDealUpdate(so) as Record<string, string>;
-
-    const cleanProps: Record<string, string> = {};
-    for (const [key, val] of Object.entries(hubspotProps)) {
-      if (val !== undefined && val !== null) cleanProps[key] = val;
-    }
-
-    if (Object.keys(cleanProps).length === 0) {
-      await idMapRepo.releaseSyncLock(mapping.id);
-      return;
-    }
-
     await hubspotClient.patch(
       `/crm/v3/objects/deals/${mapping.hubspotId}`,
       { properties: cleanProps },

@@ -110,18 +110,21 @@ router.post(
       for (const event of events) {
         // Ignorar deletions, merges y restores (v1 no los sincroniza)
         if (isDeletionEvent(event) || isMergeEvent(event) || isRestoreEvent(event)) {
+          console.log(`[webhook] ⏭️ Saltado: ${event.subscriptionType} (objectId=${event.objectId || event.fromObjectId})`);
           skipped++;
           continue;
         }
 
         const entityType = getEntityType(event);
         if (!entityType) {
+          console.log(`[webhook] ⏭️ Saltado: ${event.subscriptionType} (entidad no soportada, objectTypeId=${event.objectTypeId})`);
           skipped++;
           continue;
         }
 
         // objectId puede ser undefined en eventos associationChange
         if (!event.objectId) {
+          console.log(`[webhook] ⏭️ Saltado: ${event.subscriptionType} (sin objectId, from=${event.fromObjectId} to=${event.toObjectId})`);
           skipped++;
           continue;
         }

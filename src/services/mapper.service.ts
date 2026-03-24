@@ -82,6 +82,109 @@ const MAX_LENGTHS = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Diccionario País → Código ISO 3166-1 alpha-2
+// ---------------------------------------------------------------------------
+
+/**
+ * Convierte nombres de país (texto libre de HubSpot) a código ISO 2 letras para SAP.
+ * SAP rechaza nombres completos como "Chile" — requiere "CL".
+ *
+ * Incluye variaciones comunes: con/sin tilde, inglés/español, mayúsculas/minúsculas.
+ * Si el valor ya es un código ISO de 2 letras, lo retorna tal cual.
+ * Si no se reconoce, defaultea a 'CL' (Química Sur es empresa chilena).
+ */
+const COUNTRY_MAP: Record<string, string> = {
+  // Chile
+  'chile': 'CL',
+  'cl': 'CL',
+  // Argentina
+  'argentina': 'AR',
+  'ar': 'AR',
+  // Perú
+  'peru': 'PE',
+  'perú': 'PE',
+  'pe': 'PE',
+  // Colombia
+  'colombia': 'CO',
+  'co': 'CO',
+  // Brasil
+  'brazil': 'BR',
+  'brasil': 'BR',
+  'br': 'BR',
+  // México
+  'mexico': 'MX',
+  'méxico': 'MX',
+  'mx': 'MX',
+  // Bolivia
+  'bolivia': 'BO',
+  'bo': 'BO',
+  // Ecuador
+  'ecuador': 'EC',
+  'ec': 'EC',
+  // Paraguay
+  'paraguay': 'PY',
+  'py': 'PY',
+  // Uruguay
+  'uruguay': 'UY',
+  'uy': 'UY',
+  // Venezuela
+  'venezuela': 'VE',
+  've': 'VE',
+  // Panamá
+  'panama': 'PA',
+  'panamá': 'PA',
+  'pa': 'PA',
+  // Estados Unidos
+  'united states': 'US',
+  'united states of america': 'US',
+  'estados unidos': 'US',
+  'usa': 'US',
+  'us': 'US',
+  // España
+  'spain': 'ES',
+  'españa': 'ES',
+  'es': 'ES',
+  // China
+  'china': 'CN',
+  'cn': 'CN',
+  // Alemania
+  'germany': 'DE',
+  'alemania': 'DE',
+  'de': 'DE',
+};
+
+/**
+ * Normaliza un valor de país de HubSpot a código ISO 2 letras para SAP.
+ *
+ * Flujo:
+ *   1. Si es undefined/vacío → retorna 'CL' (default)
+ *   2. Si ya es código ISO 2 letras → retorna en mayúsculas
+ *   3. Busca en diccionario por nombre completo
+ *   4. Si no encuentra → retorna 'CL' y loguea warning
+ */
+export function normalizeCountryCode(country: string | undefined): string {
+  if (!country) return 'CL';
+
+  const trimmed = country.trim();
+  if (!trimmed) return 'CL';
+
+  // Si ya es código ISO 2 letras, retornar en mayúsculas
+  if (trimmed.length === 2) {
+    const upper = trimmed.toUpperCase();
+    // Verificar que sea un código conocido (o asumir que es válido)
+    return COUNTRY_MAP[trimmed.toLowerCase()] || upper;
+  }
+
+  // Buscar en diccionario por nombre
+  const normalized = COUNTRY_MAP[trimmed.toLowerCase()];
+  if (normalized) return normalized;
+
+  // No reconocido — loguear y defaultear
+  console.warn(`[mapper] ⚠️ País no reconocido: "${country}" — usando default 'CL'. Agregar al diccionario COUNTRY_MAP si es válido.`);
+  return 'CL';
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -260,7 +363,7 @@ export function contactToSapBP(
     StreetName: props.address,
     CityName: props.city,
     PostalCode: props.zip,
-    Country: props.country || 'CL', // Default Chile — Química Sur
+    Country: normalizeCountryCode(props.country),
     Region: props.state,
     District: props.comuna,
     Language: SAP_CONSTANTS.CORRESPONDENCE_LANGUAGE,
@@ -353,7 +456,7 @@ export function companyToSapBP(
     StreetName: props.address,
     CityName: props.city,
     PostalCode: props.zip,
-    Country: props.country || 'CL', // Default Chile — Química Sur
+    Country: normalizeCountryCode(props.country),
     Region: props.state,
     District: props.comuna,
     Language: SAP_CONSTANTS.CORRESPONDENCE_LANGUAGE,
