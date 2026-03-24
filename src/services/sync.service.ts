@@ -162,12 +162,23 @@ async function syncBPSubEntities(
 
     // 2. PATCH Address fields (street, city, zip, region, district)
     const addressPayload = mapper.extractAddressPayload(props);
+    console.log(`[sync] 📍 Address payload para BP ${sapId}:`, JSON.stringify(addressPayload));
+    console.log(`[sync] 📍 Props recibidas (address fields):`, JSON.stringify({
+      address: 'address' in props ? props.address : 'N/A',
+      city: 'city' in props ? props.city : 'N/A',
+      zip: 'zip' in props ? props.zip : 'N/A',
+      country: 'country' in props ? props.country : 'N/A',
+      state: 'state' in props ? props.state : 'N/A',
+      comuna: 'comuna' in props ? props.comuna : 'N/A',
+    }));
     if (Object.keys(addressPayload).length > 0) {
       await sapClient.patchWithETag(
         `${SAP_BP_ADDRESS_ENDPOINT}(BusinessPartner='${sapId}',AddressID='${addressId}')`,
         addressPayload,
       );
-      console.log(`[sync] 📍 Address actualizado: BP ${sapId}, AddressID ${addressId}`);
+      console.log(`[sync] 📍 Address PATCH enviado: BP ${sapId}, AddressID ${addressId}`);
+    } else {
+      console.log(`[sync] 📍 Address payload vacío — no se envía PATCH`);
     }
 
     // 3. Email sub-entity
@@ -239,9 +250,16 @@ async function syncBPSubEntities(
         }
       }
     }
-  } catch (err) {
+  } catch (err: unknown) {
     // Sub-entity sync falla no bloquea la sync principal
     console.error('[sync] ⚠️ Error sincronizando sub-entities de BP:', err instanceof Error ? err.message : err);
+    // Detalle del error SAP para diagnóstico
+    if (err && typeof err === 'object' && 'response' in err) {
+      const axiosErr = err as { response?: { data?: unknown; status?: number } };
+      if (axiosErr.response?.data) {
+        console.error('[sync] ⚠️ SAP error detail:', JSON.stringify(axiosErr.response.data).substring(0, 500));
+      }
+    }
   }
 }
 
