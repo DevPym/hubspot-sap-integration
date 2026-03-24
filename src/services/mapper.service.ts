@@ -200,6 +200,30 @@ export function normalizeCountryCode(country: string | undefined): string {
 // ---------------------------------------------------------------------------
 
 /**
+ * Elimina recursivamente propiedades con valor null o undefined de un objeto.
+ * SAP OData v2 ignora campos null en el payload pero puede causar errores
+ * si null llega en sub-entidades. Es más limpio no enviarlos.
+ *
+ * También limpia strings vacíos ("") para evitar sobrescribir datos en SAP.
+ */
+export function cleanNulls<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanNulls(item)) as T;
+  }
+  if (typeof obj === 'object') {
+    const cleaned: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
+      if (val === null || val === undefined) continue;
+      if (typeof val === 'string' && val === '') continue;
+      cleaned[key] = cleanNulls(val);
+    }
+    return cleaned as T;
+  }
+  return obj;
+}
+
+/**
  * Trunca un string al máximo permitido por SAP.
  * Retorna undefined si el input es vacío/undefined.
  */
@@ -416,7 +440,8 @@ export function contactToSapBP(
     },
   };
 
-  return payload;
+  // Limpiar null/undefined/vacíos — SAP los ignora o causa errores
+  return cleanNulls(payload);
 }
 
 /**
@@ -516,7 +541,7 @@ export function companyToSapBP(
     },
   };
 
-  return payload;
+  return cleanNulls(payload);
 }
 
 /**
@@ -593,7 +618,7 @@ export function dealToSalesOrder(
     to_Item: { results: items },
   };
 
-  return payload;
+  return cleanNulls(payload);
 }
 
 /**

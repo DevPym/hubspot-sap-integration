@@ -118,9 +118,9 @@ const HUBSPOT_ENDPOINTS: Record<EntityType, string> = {
 };
 
 const HUBSPOT_PROPERTIES: Record<EntityType, string> = {
-  CONTACT: 'firstname,lastname,email,phone,mobilephone,fax,address,city,zip,country,state,company,jobtitle,salutation,industry,lastmodifieddate,comuna',
-  COMPANY: 'name,description,phone,industry,founded_year,address,city,zip,country,state,hs_lastmodifieddate,comuna,rut,condicion_venta,razon_social,banco_1,banco_2',
-  DEAL: 'dealname,amount,closedate,deal_currency_code,dealstage,pipeline,hubspot_owner_id,hs_lastmodifieddate,condicion_de_pago,fecha_de_entrega,orden_de_compra,cantidad_producto',
+  CONTACT: 'firstname,lastname,email,phone,mobilephone,address,city,zip,country,state,company,jobtitle,lastmodifieddate,comuna',
+  COMPANY: 'name,description,phone,industry,founded_year,address,city,zip,country,state,hs_lastmodifieddate,comuna,rut_empresa,condicion_venta,razon_social',
+  DEAL: 'dealname,amount,closedate,deal_currency_code,dealstage,pipeline,hubspot_owner_id,hs_lastmodifieddate,condicion_de_pago,fecha_de_entrega,orden_de_compra_o_contratoo,cuanto_es_la_cantidad_requerida_del_producto_',
 };
 
 const SAP_BP_ENDPOINT = '/API_BUSINESS_PARTNER/A_BusinessPartner';
