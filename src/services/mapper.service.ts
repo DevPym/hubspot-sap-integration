@@ -360,8 +360,8 @@ export function companyToSapBP(
   };
 
   // Tax (RUT) si existe
-  const taxEntries = props.rut
-    ? [{ BPTaxType: SAP_CONSTANTS.TAX_TYPE_RUT, BPTaxNumber: props.rut }]
+  const taxEntries = props.rut_empresa
+    ? [{ BPTaxType: SAP_CONSTANTS.TAX_TYPE_RUT, BPTaxNumber: props.rut_empresa }]
     : [];
 
   // PaymentTerms: usar condicion_venta custom o default NT30
@@ -584,7 +584,7 @@ export function sapBPToCompanyUpdate(
     if (year && !isNaN(parseInt(year, 10))) props.founded_year = year;
   }
   if (phone) props.phone = phone;
-  if (rut) props.rut = rut;
+  if (rut) props.rut_empresa = rut;
 
   if (address) {
     if (address.StreetName) props.address = address.StreetName;

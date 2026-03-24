@@ -228,7 +228,7 @@ describe('companyToSapBP', () => {
   it('genera payload de creación con Category=2', () => {
     const payload = companyToSapBP({
       name: 'Empresa Test',
-      rut: '12.345.678-9',
+      rut_empresa: '12.345.678-9',
     }, '53147869965');
 
     expect(payload.BusinessPartnerCategory).toBe('2');
@@ -237,14 +237,14 @@ describe('companyToSapBP', () => {
   });
 
   it('incluye RUT como BPTaxNumber tipo CO3', () => {
-    const payload = companyToSapBP({ rut: '12.345.678-9' }, '123');
+    const payload = companyToSapBP({ rut_empresa: '12.345.678-9' }, '123');
     const tax = payload.to_BusinessPartnerTax?.results;
     expect(tax).toHaveLength(1);
     expect(tax?.[0].BPTaxType).toBe('CO3');
     expect(tax?.[0].BPTaxNumber).toBe('12.345.678-9');
   });
 
-  it('no incluye tax si rut es undefined', () => {
+  it('no incluye tax si rut_empresa es undefined', () => {
     const payload = companyToSapBP({ name: 'Test' }, '123');
     expect(payload.to_BusinessPartnerTax?.results).toHaveLength(0);
   });
@@ -434,7 +434,7 @@ describe('sapBPToCompanyUpdate', () => {
     expect(props.name).toBe('Empresa SAP');
     expect(props.razon_social).toBe('Razón Social');
     expect(props.founded_year).toBe('2005');
-    expect(props.rut).toBe('12.345.678-9');
+    expect(props.rut_empresa).toBe('12.345.678-9');
   });
 });
 

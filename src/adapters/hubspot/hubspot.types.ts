@@ -12,7 +12,7 @@
  *
  * Propiedades custom de Química Sur (grupo "quimica_del_sur"):
  *   Contact: comuna, id_sap
- *   Company: comuna, rut, condicion_venta, razon_social, rut_representante_legal, id_sap
+ *   Company: comuna, rut_empresa, condicion_venta, razon_social, rut_representante_legal, id_sap
  *   Deal:    condicion_de_pago, fecha_de_entrega, orden_de_compra_o_contratoo,
  *            cuanto_es_la_cantidad_requerida_del_producto_, id_sap
  *
@@ -108,7 +108,7 @@ export type HubSpotContact = HubSpotObject<HubSpotContactProperties>;
  *   description      → OrganizationBPName2 (overflow)
  *   phone            ↔ to_PhoneNumber.PhoneNumber
  *   address/city/... → mismos campos Address que Contact
- *   rut              ↔ BPTaxNumber (BPTaxType=CO3)
+ *   rut_empresa      ↔ BPTaxNumber (BPTaxType=CO3)
  *   condicion_venta  ↔ CustomerCompany.PaymentTerms
  *   industry         ↔ Industry
  *   founded_year     ↔ OrganizationFoundationDate (año→fecha)
@@ -142,7 +142,7 @@ export interface HubSpotCompanyProperties {
   /** Nombre de la comuna (distrito) */
   comuna?: string;
   /** RUT empresa formato chileno (ej: '12.345.678-9') */
-  rut?: string;
+  rut_empresa?: string;
   /** Condición de venta / término de pago */
   condicion_venta?: string;
   /** Razón social legal */

@@ -132,10 +132,10 @@ async function testReadHubSpotEntities() {
   try {
     const res = await hubspotClient.get<HubSpotCompany>(
       `/crm/v3/objects/companies/${TEST_IDS.hubspot.companyId}`,
-      { params: { properties: 'name,phone,address,city,country,rut,condicion_venta,razon_social,hs_lastmodifieddate' } },
+      { params: { properties: 'name,phone,address,city,country,rut_empresa,condicion_venta,razon_social,hs_lastmodifieddate' } },
     );
     const p = res.data.properties;
-    pass(`Company: ${p.name} | rut=${p.rut} | hs_lastmodifieddate=${p.hs_lastmodifieddate}`);
+    pass(`Company: ${p.name} | rut_empresa=${p.rut_empresa} | hs_lastmodifieddate=${p.hs_lastmodifieddate}`);
   } catch (e) {
     fail('HubSpot GET Company completo', e);
   }
@@ -214,7 +214,7 @@ async function testMapperTransformations() {
   try {
     const res = await hubspotClient.get<HubSpotCompany>(
       `/crm/v3/objects/companies/${TEST_IDS.hubspot.companyId}`,
-      { params: { properties: 'name,phone,rut,condicion_venta,razon_social,address,city,country' } },
+      { params: { properties: 'name,phone,rut_empresa,condicion_venta,razon_social,address,city,country' } },
     );
     const payload = mapper.companyToSapBP(res.data.properties, TEST_IDS.hubspot.companyId);
     pass(`Company→BP: Category=${payload.BusinessPartnerCategory}, Name=${payload.OrganizationBPName1}`);
@@ -305,7 +305,7 @@ async function testCreateCompanyInSap() {
           name: `IntTest Company ${timestamp}`,
           phone: '+56222222222',
           // RUT único por test para evitar duplicados en SAP
-          rut: `99.${String(timestamp).slice(-3)}.${String(timestamp).slice(-6, -3)}-0`,
+          rut_empresa: `99.${String(timestamp).slice(-3)}.${String(timestamp).slice(-6, -3)}-0`,
           country: 'CL',
           city: 'Santiago',
           address: 'Av. Test 123',
@@ -324,7 +324,7 @@ async function testCreateCompanyInSap() {
   try {
     const res = await hubspotClient.get<HubSpotCompany>(
       `/crm/v3/objects/companies/${newCompanyId}`,
-      { params: { properties: 'name,phone,rut,country,city,address' } },
+      { params: { properties: 'name,phone,rut_empresa,country,city,address' } },
     );
     companyProps = res.data.properties;
     pass(`HubSpot READ Company ${newCompanyId} → ${companyProps.name}`);
