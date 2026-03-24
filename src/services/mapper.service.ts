@@ -462,6 +462,78 @@ export function contactToSapBPUpdate(props: Partial<HubSpotContactProperties>): 
   return update;
 }
 
+/**
+ * Extrae los campos de dirección de un Contact/Company de HubSpot
+ * para hacer PATCH al Address sub-entity de SAP.
+ *
+ * SAP BP Address es una sub-entity separada. En OData v2, el deep insert
+ * a veces no escribe todos los campos del Address. Por eso hacemos
+ * un PATCH explícito después del CREATE/UPDATE.
+ *
+ * Los campos de email, phone y mobile se manejan como sub-sub-entities
+ * del Address y requieren POST/PATCH separados.
+ */
+export function extractAddressPayload(
+  props: Partial<HubSpotContactProperties> | Partial<HubSpotCompanyProperties>,
+): Record<string, string | undefined> {
+  const address: Record<string, string | undefined> = {};
+
+  if ('address' in props && props.address) address.StreetName = props.address;
+  if ('city' in props && props.city) address.CityName = props.city;
+  if ('zip' in props && props.zip) address.PostalCode = props.zip;
+  if ('country' in props && props.country) address.Country = normalizeCountryCode(props.country);
+  if ('state' in props && props.state) address.Region = props.state;
+  if ('comuna' in props && props.comuna) address.District = props.comuna;
+
+  return address;
+}
+
+/**
+ * Extrae datos de email para POST/PATCH a la sub-entity EmailAddress.
+ */
+export function extractEmailPayload(
+  props: Partial<HubSpotContactProperties> | Partial<HubSpotCompanyProperties>,
+): { OrdinalNumber: string; EmailAddress: string } | null {
+  const email = 'email' in props ? props.email : undefined;
+  if (!email) return null;
+  return { OrdinalNumber: '1', EmailAddress: email };
+}
+
+/**
+ * Extrae datos de teléfono para POST/PATCH a la sub-entity PhoneNumber.
+ */
+export function extractPhonePayload(
+  props: Partial<HubSpotContactProperties> | Partial<HubSpotCompanyProperties>,
+): { OrdinalNumber: string; PhoneNumber: string; DestinationLocationCountry: string; PhoneNumberType: string } | null {
+  const phoneStr = 'phone' in props ? props.phone : undefined;
+  if (!phoneStr) return null;
+  const phone = parsePhone(phoneStr);
+  if (!phone.number) return null;
+  return {
+    OrdinalNumber: '1',
+    PhoneNumber: phone.number,
+    DestinationLocationCountry: phone.countryCode,
+    PhoneNumberType: '1',
+  };
+}
+
+/**
+ * Extrae datos de celular para POST/PATCH a la sub-entity MobilePhoneNumber.
+ */
+export function extractMobilePayload(
+  props: Partial<HubSpotContactProperties>,
+): { OrdinalNumber: string; PhoneNumber: string; DestinationLocationCountry: string; PhoneNumberType: string } | null {
+  if (!props.mobilephone) return null;
+  const mobile = parsePhone(props.mobilephone);
+  if (!mobile.number) return null;
+  return {
+    OrdinalNumber: '1',
+    PhoneNumber: mobile.number,
+    DestinationLocationCountry: mobile.countryCode,
+    PhoneNumberType: '3', // móvil
+  };
+}
+
 // ---------------------------------------------------------------------------
 // HubSpot Company → SAP BP Organización (Category=2)
 // ---------------------------------------------------------------------------

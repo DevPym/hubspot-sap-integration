@@ -110,6 +110,8 @@ export interface SapBPAddress {
   BusinessPartner?: string;
   AddressID?: string;
   BusinessPartnerAddressID?: string;
+  /** Número de persona (para sub-entities email/phone clave compuesta) */
+  Person?: string;
   StreetName?: string;
   CityName?: string;
   PostalCode?: string;

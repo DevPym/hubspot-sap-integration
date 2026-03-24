@@ -67,11 +67,13 @@ import * as idMapRepo from '../db/repositories/idmap.repository';
 import * as syncLogRepo from '../db/repositories/synclog.repository';
 import * as mapper from './mapper.service';
 import * as conflict from './conflict.service';
-import type { ODataResponse } from '../adapters/sap/sap.types';
+import type { ODataResponse, ODataListResponse, SapBPAddress } from '../adapters/sap/sap.types';
 import type {
   HubSpotContact,
   HubSpotCompany,
   HubSpotDeal,
+  HubSpotContactProperties,
+  HubSpotCompanyProperties,
   HubSpotAssociationsResponse,
 } from '../adapters/hubspot/hubspot.types';
 import type { EntityType, SystemSource } from '../generated/prisma/client';
@@ -124,7 +126,124 @@ const HUBSPOT_PROPERTIES: Record<EntityType, string> = {
 };
 
 const SAP_BP_ENDPOINT = '/API_BUSINESS_PARTNER/A_BusinessPartner';
+const SAP_BP_ADDRESS_ENDPOINT = '/API_BUSINESS_PARTNER/A_BusinessPartnerAddress';
 const SAP_SO_ENDPOINT = '/API_SALES_ORDER_SRV/A_SalesOrder';
+
+// ---------------------------------------------------------------------------
+// Sync sub-entities de BP Address (PATCH address, email, phone, mobile)
+// ---------------------------------------------------------------------------
+
+/**
+ * Después de crear o actualizar un BP en SAP, sincroniza las sub-entities
+ * del Address (StreetName, CityName, etc.) y las sub-sub-entities
+ * (Email, Phone, Mobile) que SAP no acepta en deep insert.
+ *
+ * Flujo:
+ * 1. GET /A_BusinessPartner('ID')/to_BusinessPartnerAddress → obtener AddressID
+ * 2. PATCH /A_BusinessPartnerAddress(BP='ID',AddressID='XXX') → actualizar dirección
+ * 3. Para email/phone/mobile: verificar si existe → PUT o POST
+ */
+async function syncBPSubEntities(
+  sapId: string,
+  props: Partial<HubSpotContactProperties> | Partial<HubSpotCompanyProperties>,
+): Promise<void> {
+  try {
+    // 1. Obtener AddressID del BP
+    const addrResponse = await sapClient.get<ODataListResponse<SapBPAddress>>(
+      `${SAP_BP_ENDPOINT}('${sapId}')/to_BusinessPartnerAddress`,
+    );
+    const addresses = addrResponse.data.d.results;
+    if (!addresses || addresses.length === 0) {
+      console.warn(`[sync] BP ${sapId} no tiene Address. No se pueden sincronizar sub-entities.`);
+      return;
+    }
+    const addressId = addresses[0].AddressID;
+    const person = addresses[0].Person || '';
+
+    // 2. PATCH Address fields (street, city, zip, region, district)
+    const addressPayload = mapper.extractAddressPayload(props);
+    if (Object.keys(addressPayload).length > 0) {
+      await sapClient.patchWithETag(
+        `${SAP_BP_ADDRESS_ENDPOINT}(BusinessPartner='${sapId}',AddressID='${addressId}')`,
+        addressPayload,
+      );
+      console.log(`[sync] 📍 Address actualizado: BP ${sapId}, AddressID ${addressId}`);
+    }
+
+    // 3. Email sub-entity
+    const emailPayload = mapper.extractEmailPayload(props);
+    if (emailPayload) {
+      try {
+        // Intentar PATCH al email existente (OrdinalNumber=1)
+        await sapClient.patchWithETag(
+          `/API_BUSINESS_PARTNER/A_AddressEmailAddress(AddressID='${addressId}',Person='${person}',OrdinalNumber='1')`,
+          emailPayload,
+        );
+        console.log(`[sync] 📧 Email actualizado: BP ${sapId}`);
+      } catch {
+        // Si no existe, crear con POST
+        try {
+          await sapClient.post(
+            `${SAP_BP_ADDRESS_ENDPOINT}(BusinessPartner='${sapId}',AddressID='${addressId}')/to_EmailAddress`,
+            emailPayload,
+          );
+          console.log(`[sync] 📧 Email creado: BP ${sapId}`);
+        } catch (postErr) {
+          console.warn(`[sync] ⚠️ No se pudo crear email para BP ${sapId}:`, postErr instanceof Error ? postErr.message : postErr);
+        }
+      }
+    }
+
+    // 4. Phone sub-entity
+    const phonePayload = mapper.extractPhonePayload(props);
+    if (phonePayload) {
+      try {
+        await sapClient.patchWithETag(
+          `/API_BUSINESS_PARTNER/A_AddressPhoneNumber(AddressID='${addressId}',Person='${person}',OrdinalNumber='1')`,
+          phonePayload,
+        );
+        console.log(`[sync] 📞 Teléfono actualizado: BP ${sapId}`);
+      } catch {
+        try {
+          await sapClient.post(
+            `${SAP_BP_ADDRESS_ENDPOINT}(BusinessPartner='${sapId}',AddressID='${addressId}')/to_PhoneNumber`,
+            phonePayload,
+          );
+          console.log(`[sync] 📞 Teléfono creado: BP ${sapId}`);
+        } catch (postErr) {
+          console.warn(`[sync] ⚠️ No se pudo crear teléfono para BP ${sapId}:`, postErr instanceof Error ? postErr.message : postErr);
+        }
+      }
+    }
+
+    // 5. Mobile sub-entity (solo para contacts)
+    if ('mobilephone' in props) {
+      const mobilePayload = mapper.extractMobilePayload(props as Partial<HubSpotContactProperties>);
+      if (mobilePayload) {
+        try {
+          await sapClient.patchWithETag(
+            `/API_BUSINESS_PARTNER/A_AddressPhoneNumber(AddressID='${addressId}',Person='${person}',OrdinalNumber='2')`,
+            mobilePayload,
+          );
+          console.log(`[sync] 📱 Móvil actualizado: BP ${sapId}`);
+        } catch {
+          try {
+            await sapClient.post(
+              `${SAP_BP_ADDRESS_ENDPOINT}(BusinessPartner='${sapId}',AddressID='${addressId}')/to_MobilePhoneNumber`,
+              mobilePayload,
+            );
+            console.log(`[sync] 📱 Móvil creado: BP ${sapId}`);
+          } catch (postErr) {
+            console.warn(`[sync] ⚠️ No se pudo crear móvil para BP ${sapId}:`, postErr instanceof Error ? postErr.message : postErr);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    // Sub-entity sync falla no bloquea la sync principal
+    console.error('[sync] ⚠️ Error sincronizando sub-entities de BP:', err instanceof Error ? err.message : err);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Sincronización HubSpot → SAP
@@ -306,6 +425,16 @@ async function handleCreate(
   // Crear mapping en id_map
   const newMap = await idMapRepo.create({ entityType, hubspotId, sapId });
 
+  // 📍 Sincronizar sub-entities de Address (street, city, email, phone, mobile)
+  // SAP deep insert no siempre escribe todos los campos del Address.
+  if (entityType === 'CONTACT') {
+    const contact = hubspotData as HubSpotContact;
+    await syncBPSubEntities(sapId, contact.properties);
+  } else if (entityType === 'COMPANY') {
+    const company = hubspotData as HubSpotCompany;
+    await syncBPSubEntities(sapId, company.properties);
+  }
+
   // ⭐ Writeback: guardar id_sap en HubSpot para referencia cruzada
   try {
     const hsObjectType = entityType === 'CONTACT' ? 'contacts'
@@ -447,8 +576,17 @@ async function handleUpdate(
       outboundPayload,
     });
 
-    // PATCH con ETag automático
+    // PATCH con ETag automático (campos principales del BP/SO)
     await sapClient.patchWithETag(sapPath, outboundPayload);
+
+    // 📍 Sincronizar sub-entities de Address (street, city, email, phone, mobile)
+    if (entityType === 'CONTACT') {
+      const contact = hubspotData as HubSpotContact;
+      await syncBPSubEntities(sapId, contact.properties);
+    } else if (entityType === 'COMPANY') {
+      const company = hubspotData as HubSpotCompany;
+      await syncBPSubEntities(sapId, company.properties);
+    }
 
     // Log: SUCCESS
     await syncLogRepo.create({
