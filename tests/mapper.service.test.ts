@@ -236,11 +236,11 @@ describe('companyToSapBP', () => {
     expect(payload.BusinessPartnerIDByExtSystem).toBe('53147869965');
   });
 
-  it('incluye RUT como BPTaxNumber tipo CO3', () => {
+  it('incluye RUT como BPTaxNumber tipo CL1', () => {
     const payload = companyToSapBP({ rut_empresa: '12.345.678-9' }, '123');
     const tax = payload.to_BusinessPartnerTax?.results;
     expect(tax).toHaveLength(1);
-    expect(tax?.[0].BPTaxType).toBe('CO3');
+    expect(tax?.[0].BPTaxType).toBe('CL1');
     expect(tax?.[0].BPTaxNumber).toBe('12.345.678-9');
   });
 

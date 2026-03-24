@@ -50,27 +50,38 @@ import type {
   HubSpotDealProperties,
 } from '../adapters/hubspot/hubspot.types';
 
+import { env } from '../config/env';
+
 // ---------------------------------------------------------------------------
-// Constantes de Química Sur (verificadas en producción)
+// Constantes SAP — leídas desde variables de entorno
 // ---------------------------------------------------------------------------
 
-/** Constantes SAP para creación de Business Partners */
+/**
+ * Constantes SAP construidas desde env vars.
+ * Todos los valores tienen defaults en env.schema.ts.
+ * Se pueden cambiar sin modificar código (solo env vars en Railway).
+ *
+ * Valores por defecto verificados en producción de Química Sur (2026-03-24):
+ *   TAX_TYPE: CL1 (RUT Chile, NO CO3 como decía la doc original)
+ *   RECONCILIATION_ACCOUNT: 10200600 (NO 12120100)
+ */
 export const SAP_CONSTANTS = {
-  BP_GROUPING: 'BP02',
-  CORRESPONDENCE_LANGUAGE: 'ES',
-  COMPANY_CODE: '4610',
-  PAYMENT_TERMS: 'NT30',
-  RECONCILIATION_ACCOUNT: '12120100',
-  TAX_TYPE_RUT: 'CO3',
-  ROLES: ['FLCU00', 'FLCU01'],
-  // Sales Order
-  SALES_ORDER_TYPE: 'OR',
-  SALES_ORGANIZATION: '4601',
-  DISTRIBUTION_CHANNEL: 'CF',
-  ORGANIZATION_DIVISION: '10',
-  MATERIAL: 'Q01',
-  MATERIAL_UNIT: 'L',
-} as const;
+  get BP_GROUPING() { return env.SAP_BP_GROUPING; },
+  get CORRESPONDENCE_LANGUAGE() { return env.SAP_CORRESPONDENCE_LANGUAGE; },
+  get COMPANY_CODE() { return env.SAP_COMPANY_CODE; },
+  get PAYMENT_TERMS() { return env.SAP_DEFAULT_PAYMENT_TERMS; },
+  get RECONCILIATION_ACCOUNT() { return env.SAP_RECONCILIATION_ACCOUNT; },
+  get TAX_TYPE_RUT() { return env.SAP_TAX_TYPE; },
+  get ROLES() { return env.SAP_BP_ROLES.split(','); },
+  get SALES_ORDER_TYPE() { return env.SAP_SALES_ORDER_TYPE; },
+  get SALES_ORGANIZATION() { return env.SAP_SALES_ORGANIZATION; },
+  get DISTRIBUTION_CHANNEL() { return env.SAP_DISTRIBUTION_CHANNEL; },
+  get ORGANIZATION_DIVISION() { return env.SAP_ORGANIZATION_DIVISION; },
+  get MATERIAL() { return env.SAP_DEFAULT_MATERIAL; },
+  get MATERIAL_UNIT() { return env.SAP_DEFAULT_MATERIAL_UNIT; },
+  get DEFAULT_CURRENCY() { return env.SAP_DEFAULT_CURRENCY; },
+  get DEFAULT_COUNTRY() { return env.SAP_DEFAULT_COUNTRY; },
+};
 
 /** Límites de longitud de campos SAP */
 const MAX_LENGTHS = {
@@ -163,10 +174,10 @@ const COUNTRY_MAP: Record<string, string> = {
  *   4. Si no encuentra → retorna 'CL' y loguea warning
  */
 export function normalizeCountryCode(country: string | undefined): string {
-  if (!country) return 'CL';
+  if (!country) return SAP_CONSTANTS.DEFAULT_COUNTRY;
 
   const trimmed = country.trim();
-  if (!trimmed) return 'CL';
+  if (!trimmed) return SAP_CONSTANTS.DEFAULT_COUNTRY;
 
   // Si ya es código ISO 2 letras, retornar en mayúsculas
   if (trimmed.length === 2) {
@@ -180,8 +191,8 @@ export function normalizeCountryCode(country: string | undefined): string {
   if (normalized) return normalized;
 
   // No reconocido — loguear y defaultear
-  console.warn(`[mapper] ⚠️ País no reconocido: "${country}" — usando default 'CL'. Agregar al diccionario COUNTRY_MAP si es válido.`);
-  return 'CL';
+  console.warn(`[mapper] ⚠️ País no reconocido: "${country}" — usando default '${SAP_CONSTANTS.DEFAULT_COUNTRY}'. Agregar al diccionario COUNTRY_MAP si es válido.`);
+  return SAP_CONSTANTS.DEFAULT_COUNTRY;
 }
 
 // ---------------------------------------------------------------------------
@@ -576,7 +587,7 @@ export function dealToSalesOrder(
     OrganizationDivision: SAP_CONSTANTS.ORGANIZATION_DIVISION,
     SoldToParty: sapCompanyId,
     PurchaseOrderByCustomer: purchaseOrder,
-    TransactionCurrency: props.deal_currency_code || 'CLP',
+    TransactionCurrency: props.deal_currency_code || SAP_CONSTANTS.DEFAULT_CURRENCY,
     RequestedDeliveryDate: deliveryDate,
     CustomerPaymentTerms: props.condicion_de_pago,
     to_Item: { results: items },
