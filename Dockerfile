@@ -32,8 +32,8 @@ RUN npm ci --omit=dev
 # Copiar el código compilado desde la etapa de build
 COPY --from=builder /app/dist ./dist
 
-# Puerto que usa Express (configurable via variable de entorno)
-EXPOSE 3000
+# Puerto que usa Express (Railway usa PORT=8080 por defecto)
+EXPOSE 8080
 
 # Ejecutar el servidor
 CMD ["node", "dist/index.js"]
