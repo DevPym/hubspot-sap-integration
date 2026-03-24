@@ -17,6 +17,11 @@ import hubspotRoutes from './api/routes/hubspot.routes';
 
 const app = express();
 
+// Railway usa un reverse proxy — Express necesita confiar en él para que
+// req.protocol devuelva 'https' (no 'http'). Sin esto, la firma HMAC falla
+// porque HubSpot firma con https:// pero nosotros reconstruíamos con http://.
+app.set('trust proxy', 1);
+
 // ---------------------------------------------------------------------------
 // Middlewares globales
 // ---------------------------------------------------------------------------
