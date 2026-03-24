@@ -13,6 +13,7 @@ import { env } from './config/env';
 import { errorHandler } from './api/middleware/error.middleware';
 import { createSyncWorker, closeSyncWorker } from './queue/sync.worker';
 import { closeSyncQueue } from './queue/sync.queue';
+import { startSapPoller, stopSapPoller } from './services/sap-poller.service';
 import hubspotRoutes from './api/routes/hubspot.routes';
 
 const app = express();
@@ -70,6 +71,9 @@ try {
   console.error('[server] El servidor seguirá funcionando sin procesar cola.');
 }
 
+// Iniciar poller SAP → HubSpot (primer poll a los 30s, luego cada 5 min)
+startSapPoller();
+
 // ---------------------------------------------------------------------------
 // Graceful shutdown
 // ---------------------------------------------------------------------------
@@ -82,7 +86,10 @@ async function shutdown(signal: string) {
     console.log('[server] HTTP server cerrado');
   });
 
-  // 2. Cerrar worker y cola BullMQ
+  // 2. Detener poller SAP
+  stopSapPoller();
+
+  // 3. Cerrar worker y cola BullMQ
   if (workerStarted) {
     try {
       await closeSyncWorker();

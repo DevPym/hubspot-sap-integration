@@ -49,6 +49,12 @@ export const envSchema = z.object({
     .regex(/^\d+$/, 'MAX_RETRY_ATTEMPTS debe ser un número entero')
     .transform(Number)
     .default('5'),
+  /** Intervalo de polling SAP en milisegundos (default: 5 minutos = 300000) */
+  SAP_POLL_INTERVAL_MS: z
+    .string()
+    .regex(/^\d+$/, 'SAP_POLL_INTERVAL_MS debe ser un número entero (milisegundos)')
+    .transform(Number)
+    .default('300000'),
 });
 
 export type Env = z.infer<typeof envSchema>;
