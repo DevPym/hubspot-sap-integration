@@ -289,6 +289,37 @@ async function syncBPToHubSpot(bp: SapBusinessPartner): Promise<void> {
 
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+
+    // HubSpot 400 por email duplicado: reintentar sin email
+    const isEmailConflict = msg.includes('already has that value') && cleanProps.email;
+    if (isEmailConflict) {
+      console.warn(`[sap-poller] ⚠️ Email duplicado en HubSpot, reintentando sin email para BP ${sapId}`);
+      const { email: _, ...propsWithoutEmail } = cleanProps;
+      try {
+        if (Object.keys(propsWithoutEmail).length > 0) {
+          await hubspotClient.patch(
+            `/crm/v3/objects/${hsObjectType}/${mapping.hubspotId}`,
+            { properties: propsWithoutEmail },
+          );
+          console.log(`[sap-poller] ✅ UPDATE (sin email) ${entityType} SAP:${sapId} → HS:${mapping.hubspotId}`);
+          await syncLogRepo.create({
+            idMapId: mapping.id,
+            entityType,
+            operation: 'UPDATE',
+            sourceSystem: 'SAP',
+            targetSystem: 'HUBSPOT',
+            status: 'SUCCESS',
+            inboundPayload: toJson({ sapId, category, note: 'email excluido por duplicado' }),
+            outboundPayload: toJson(propsWithoutEmail),
+          });
+          return; // Salir del catch, no registrar como FAILED
+        }
+      } catch (retryErr) {
+        const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+        console.error(`[sap-poller] ❌ Reintento sin email también falló para BP ${sapId}:`, retryMsg);
+      }
+    }
+
     console.error(`[sap-poller] ❌ Error syncing BP ${sapId}:`, msg);
 
     await syncLogRepo.create({
