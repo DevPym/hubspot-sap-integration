@@ -65,6 +65,21 @@ import * as idMapRepo from '../src/db/repositories/idmap.repository';
 import * as syncLogRepo from '../src/db/repositories/synclog.repository';
 
 // ---------------------------------------------------------------------------
+// Helper: mock de sapClient.get para to_BusinessPartnerAddress
+// Usado en syncBPSubEntities — se llama después de crear/actualizar un BP.
+// ---------------------------------------------------------------------------
+
+function mockSapBPAddress() {
+  vi.mocked(sapClient.get).mockResolvedValue({
+    data: { d: { results: [{ AddressID: '1', Person: '' }] } },
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    config: {} as never,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 
@@ -125,6 +140,9 @@ describe('syncHubSpotToSap — CREATE Contact', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+
+    // Mock sapClient.get para syncBPSubEntities → to_BusinessPartnerAddress
+    mockSapBPAddress();
 
     const event: HubSpotSyncEvent = {
       objectId: '210581802294',
@@ -192,6 +210,9 @@ describe('syncHubSpotToSap — CREATE Company', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+
+    // Mock sapClient.get para syncBPSubEntities → to_BusinessPartnerAddress
+    mockSapBPAddress();
 
     const result = await syncHubSpotToSap({
       objectId: '53147869965',
@@ -278,6 +299,8 @@ describe('syncHubSpotToSap — CREATE Deal', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+
+    // Deal no llama syncBPSubEntities — no necesita mockSapBPAddress()
 
     const result = await syncHubSpotToSap({
       objectId: '58247306498',
@@ -374,6 +397,9 @@ describe('syncHubSpotToSap — UPDATE', () => {
       config: {} as never,
     });
 
+    // Mock sapClient.get para syncBPSubEntities → to_BusinessPartnerAddress
+    mockSapBPAddress();
+
     const result = await syncHubSpotToSap({
       objectId: '210581802294',
       entityType: 'CONTACT',
@@ -444,7 +470,7 @@ describe('syncHubSpotToSap — UPDATE', () => {
       config: {} as never,
     });
 
-    // SAP falla
+    // SAP falla — no se llega a syncBPSubEntities, no necesita mockSapBPAddress()
     vi.mocked(sapClient.patchWithETag).mockRejectedValue(new Error('SAP timeout'));
 
     const result = await syncHubSpotToSap({
