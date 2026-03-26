@@ -36,7 +36,12 @@
 
 import { Worker, type Job } from 'bullmq';
 import { QUEUE_NAME } from './sync.queue';
-import { syncHubSpotToSap, type HubSpotSyncEvent, type SyncResult } from '../services/sync.service';
+import {
+  syncHubSpotToSap,
+  MissingDependencyError,
+  type HubSpotSyncEvent,
+  type SyncResult,
+} from '../services/sync.service';
 import { retryJobRepo } from '../db/repositories/retryjob.repository';
 import { env } from '../config/env';
 
@@ -144,9 +149,21 @@ export function createSyncWorker(): Worker<HubSpotSyncEvent, SyncResult> {
     const isLastAttempt = job.attemptsMade >= env.MAX_RETRY_ATTEMPTS;
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    console.error(
-      `[worker] ❌ Job ${job.id} failed (intento ${job.attemptsMade}/${env.MAX_RETRY_ATTEMPTS}): ${errorMessage}`,
-    );
+    // Fix B1: Logging diferenciado para errores de dependencia faltante
+    // Estos errores son esperados — la Company puede tardar en sincronizarse.
+    const isMissingDependency = error instanceof MissingDependencyError ||
+      errorMessage.includes('no encontrada en id_map');
+
+    if (isMissingDependency && !isLastAttempt) {
+      console.log(
+        `[worker] ⏳ Job ${job.id} esperando dependencia (intento ${job.attemptsMade}/${env.MAX_RETRY_ATTEMPTS}): ` +
+        `${job.data.entityType} ${job.data.objectId} — Company aún no sincronizada`,
+      );
+    } else {
+      console.error(
+        `[worker] ❌ Job ${job.id} failed (intento ${job.attemptsMade}/${env.MAX_RETRY_ATTEMPTS}): ${errorMessage}`,
+      );
+    }
 
     try {
       const existing = await retryJobRepo.findByBullmqJobId(job.id!);

@@ -85,6 +85,29 @@ function toJson(obj: unknown): Prisma.InputJsonValue {
 }
 
 // ---------------------------------------------------------------------------
+// Error retriable: dependencia (Company) aún no sincronizada
+// ---------------------------------------------------------------------------
+
+/**
+ * Error específico para cuando un Deal necesita una Company que aún no tiene
+ * mapping en id_map. BullMQ lo reintentará con backoff exponencial, dando
+ * tiempo a que la Company se sincronice en paralelo.
+ *
+ * Se distingue del catch general para:
+ *   - No crear un sync_log FAILED redundante (ya se logueó como PENDING)
+ *   - Permitir logging diferenciado en el worker
+ */
+export class MissingDependencyError extends Error {
+  readonly code = 'MISSING_COMPANY';
+  readonly retriable = true;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'MissingDependencyError';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Tipos de entrada
 // ---------------------------------------------------------------------------
 
@@ -288,6 +311,12 @@ export async function syncHubSpotToSap(event: HubSpotSyncEvent): Promise<SyncRes
       return await handleUpdate(entityType, objectId, occurredAt, existingMap, source, target);
     }
   } catch (error) {
+    // Fix B1: Re-lanzar errores retriables para que BullMQ los reintente
+    // directamente, sin crear un sync_log FAILED redundante.
+    if (error instanceof MissingDependencyError) {
+      throw error;
+    }
+
     // Extraer detalle de errores Axios (SAP/HubSpot devuelven info en response.data)
     let errorMsg = error instanceof Error ? error.message : String(error);
     if (error && typeof error === 'object' && 'response' in error) {
@@ -395,26 +424,27 @@ async function handleCreate(
     const deal = hubspotData as HubSpotDeal;
 
     // ⭐ Obtener Company asociada al Deal
+    // Fix B1: Si la Company no tiene mapping aún, lanzar MissingDependencyError
+    // para que BullMQ reintente con backoff exponencial (1s, 2s, 4s, 8s, 16s).
+    // Durante ese tiempo, la Company puede completar su sincronización.
     const sapCompanyId = await resolveCompanyForDeal(hubspotId);
     if (!sapCompanyId) {
+      // Log como PENDING (no FAILED) — es un reintento esperado
       await syncLogRepo.create({
         entityType,
         operation: 'CREATE',
         sourceSystem: source,
         targetSystem: target,
-        status: 'FAILED',
+        status: 'PENDING',
         inboundPayload: toJson(deal.properties),
-        errorMessage: 'Company asociada al Deal no encontrada en id_map. Debe sincronizarse primero.',
+        errorMessage: 'Company asociada al Deal no encontrada en id_map. Reintentando con backoff...',
         errorCode: 'MISSING_COMPANY',
       });
 
-      return {
-        success: false,
-        operation: 'CREATE',
-        entityType,
-        hubspotId,
-        error: 'Company asociada no sincronizada. Requiere sync previo de Company.',
-      };
+      throw new MissingDependencyError(
+        `Company asociada al Deal ${hubspotId} no encontrada en id_map. ` +
+        `Se reintentará con backoff exponencial.`,
+      );
     }
 
     const payload = mapper.dealToSalesOrder(deal.properties, sapCompanyId);

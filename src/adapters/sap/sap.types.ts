@@ -211,6 +211,28 @@ export interface SapCustomerCompany {
 }
 
 // ---------------------------------------------------------------------------
+// Customer Sales Area — sub-entidad to_CustomerSalesArea
+// ---------------------------------------------------------------------------
+
+/**
+ * Área de ventas del cliente. OBLIGATORIA para que un BP sea válido como
+ * SoldToParty en Sales Orders. Sin esta sub-entidad, SAP rechaza con
+ * "No customer master record exists for sold-to party XXX".
+ *
+ * Verificado en producción: BP 70123456 tiene SalesOrg=4601, DistCh=CF, Div=10.
+ */
+export interface SapCustomerSalesArea {
+  Customer?: string;
+  SalesOrganization: string;   // '4601'
+  DistributionChannel: string; // 'CF'
+  Division: string;            // '10'
+  /** Moneda — OBLIGATORIO (KNVV-WAERS). Ej: 'CLP' */
+  Currency?: string;
+  /** Condiciones de pago del cliente */
+  CustomerPaymentTerms?: string;
+}
+
+// ---------------------------------------------------------------------------
 // BP Bank — sub-entidad to_BusinessPartnerBank
 // ---------------------------------------------------------------------------
 
@@ -241,6 +263,7 @@ export type SapCreateBPPayload = Omit<
   to_BusinessPartnerRole?: { results: SapBPRole[] };
   to_Customer?: {
     to_CustomerCompany?: { results: SapCustomerCompany[] };
+    to_CustomerSalesArea?: { results: SapCustomerSalesArea[] };
   };
 };
 

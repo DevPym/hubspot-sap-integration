@@ -590,6 +590,18 @@ export function contactToSapBP(
           ReconciliationAccount: SAP_CONSTANTS.RECONCILIATION_ACCOUNT,
         }],
       },
+      // CustomerSalesArea es OBLIGATORIO para que el BP sea válido como SoldToParty
+      // en Sales Orders. Sin esto, SAP rechaza con "No customer master record exists".
+      // Currency (KNVV-WAERS) es campo requerido.
+      to_CustomerSalesArea: {
+        results: [{
+          SalesOrganization: SAP_CONSTANTS.SALES_ORGANIZATION,
+          DistributionChannel: SAP_CONSTANTS.DISTRIBUTION_CHANNEL,
+          Division: SAP_CONSTANTS.ORGANIZATION_DIVISION,
+          Currency: SAP_CONSTANTS.DEFAULT_CURRENCY,
+          CustomerPaymentTerms: SAP_CONSTANTS.PAYMENT_TERMS,
+        }],
+      },
     },
   };
 
@@ -731,8 +743,8 @@ export function companyToSapBP(
     ? [{ BPTaxType: SAP_CONSTANTS.TAX_TYPE_RUT, BPTaxNumber: normalizeRut(props.rut_empresa)! }]
     : [];
 
-  // PaymentTerms: usar condicion_venta custom o default NT30
-  const paymentTerms = props.condicion_venta || SAP_CONSTANTS.PAYMENT_TERMS;
+  // PaymentTerms: traducir condicion_venta de HubSpot (texto) a código SAP, o usar default NT30
+  const paymentTerms = paymentTermsToSap(props.condicion_venta) || SAP_CONSTANTS.PAYMENT_TERMS;
 
   const payload: SapCreateBPPayload = {
     BusinessPartnerCategory: '2',
@@ -764,6 +776,18 @@ export function companyToSapBP(
           CompanyCode: SAP_CONSTANTS.COMPANY_CODE,
           PaymentTerms: paymentTerms,
           ReconciliationAccount: SAP_CONSTANTS.RECONCILIATION_ACCOUNT,
+        }],
+      },
+      // CustomerSalesArea es OBLIGATORIO para que el BP sea válido como SoldToParty
+      // en Sales Orders. Sin esto, SAP rechaza con "No customer master record exists".
+      // Currency (KNVV-WAERS) es campo requerido.
+      to_CustomerSalesArea: {
+        results: [{
+          SalesOrganization: SAP_CONSTANTS.SALES_ORGANIZATION,
+          DistributionChannel: SAP_CONSTANTS.DISTRIBUTION_CHANNEL,
+          Division: SAP_CONSTANTS.ORGANIZATION_DIVISION,
+          Currency: SAP_CONSTANTS.DEFAULT_CURRENCY,
+          CustomerPaymentTerms: paymentTerms,
         }],
       },
     },

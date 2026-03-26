@@ -314,7 +314,7 @@ describe('syncHubSpotToSap — CREATE Deal', () => {
     expect(result.sapId).toBe('50');
   });
 
-  it('falla si Company asociada no está en id_map', async () => {
+  it('lanza MissingDependencyError si Company asociada no está en id_map', async () => {
     vi.mocked(idMapRepo.findByHubSpotId).mockResolvedValue(null);
 
     vi.mocked(hubspotClient.get)
@@ -340,15 +340,21 @@ describe('syncHubSpotToSap — CREATE Deal', () => {
         config: {} as never,
       });
 
-    const result = await syncHubSpotToSap({
+    // Fix B1: Ahora lanza MissingDependencyError para que BullMQ reintente
+    await expect(syncHubSpotToSap({
       objectId: '58247306498',
       entityType: 'DEAL',
       occurredAt: Date.now(),
       subscriptionType: 'deal.creation',
-    });
+    })).rejects.toThrow('Company asociada al Deal 58247306498 no encontrada en id_map');
 
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('Company');
+    // Verifica que se logueó como PENDING (no FAILED)
+    expect(syncLogRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'PENDING',
+        errorCode: 'MISSING_COMPANY',
+      }),
+    );
   });
 });
 

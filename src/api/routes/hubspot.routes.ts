@@ -47,6 +47,7 @@ import {
   isDeletionEvent,
   isMergeEvent,
   isRestoreEvent,
+  isAssociationChangeEvent,
 } from '../../types/webhook.schemas';
 import { addSyncJob } from '../../queue/sync.queue';
 import type { EntityType } from '../../generated/prisma/client';
@@ -65,6 +66,42 @@ function getEntityType(event: WebhookEvent): EntityType | null {
   if (isContactEvent(event)) return 'CONTACT';
   if (isCompanyEvent(event)) return 'COMPANY';
   if (isDealEvent(event)) return 'DEAL';
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Constantes de ObjectTypeId de HubSpot
+// ---------------------------------------------------------------------------
+
+/** HubSpot Object Type IDs: "0-1"=Contact, "0-2"=Company, "0-3"=Deal */
+const HS_OBJECT_TYPE = {
+  CONTACT: '0-1',
+  COMPANY: '0-2',
+  DEAL: '0-3',
+} as const;
+
+/**
+ * Extrae el Deal ID de un evento associationChange Deal↔Company.
+ *
+ * Los eventos associationChange tienen fromObjectId/toObjectId con
+ * fromObjectTypeId/toObjectTypeId indicando qué tipo de objeto es cada uno.
+ * Esta función verifica que la asociación sea Deal↔Company y retorna el Deal ID.
+ *
+ * @returns El Deal HubSpot ID (number) o null si no es una asociación Deal↔Company
+ */
+function getDealIdFromAssociation(event: WebhookEvent): number | null {
+  const { fromObjectTypeId, toObjectTypeId, fromObjectId, toObjectId } = event;
+
+  // Deal → Company: fromObjectId es el Deal
+  if (fromObjectTypeId === HS_OBJECT_TYPE.DEAL && toObjectTypeId === HS_OBJECT_TYPE.COMPANY) {
+    return fromObjectId ?? null;
+  }
+
+  // Company → Deal: toObjectId es el Deal
+  if (fromObjectTypeId === HS_OBJECT_TYPE.COMPANY && toObjectTypeId === HS_OBJECT_TYPE.DEAL) {
+    return toObjectId ?? null;
+  }
+
   return null;
 }
 
@@ -122,7 +159,38 @@ router.post(
           continue;
         }
 
-        // objectId puede ser undefined en eventos associationChange
+        // ─────────────────────────────────────────────────────────────
+        // Fix A1: Procesar eventos associationChange (Deal↔Company)
+        // Estos eventos NO tienen objectId, pero sí fromObjectId/toObjectId.
+        // Si es una asociación Deal↔Company, encolamos sync del Deal para
+        // que resolveCompanyForDeal() recoja la nueva Company asociada.
+        // ─────────────────────────────────────────────────────────────
+        if (isAssociationChangeEvent(event)) {
+          // Ignorar eliminaciones de asociación en v1
+          if (event.associationRemoved) {
+            console.log(`[webhook] ⏭️ Saltado: ${event.subscriptionType} (asociación eliminada, from=${event.fromObjectId} to=${event.toObjectId})`);
+            skipped++;
+            continue;
+          }
+
+          const dealObjectId = getDealIdFromAssociation(event);
+          if (dealObjectId) {
+            await addSyncJob({
+              objectId: String(dealObjectId),
+              entityType: 'DEAL',
+              occurredAt: event.occurredAt,
+              subscriptionType: event.subscriptionType,
+            });
+            console.log(`[webhook] 🔗 AssociationChange Deal↔Company: encolado Deal ${dealObjectId}`);
+            enqueued++;
+          } else {
+            console.log(`[webhook] ⏭️ Saltado: ${event.subscriptionType} (asociación no es Deal↔Company, from=${event.fromObjectTypeId} to=${event.toObjectTypeId})`);
+            skipped++;
+          }
+          continue;
+        }
+
+        // objectId puede ser undefined en otros eventos no soportados
         if (!event.objectId) {
           console.log(`[webhook] ⏭️ Saltado: ${event.subscriptionType} (sin objectId, from=${event.fromObjectId} to=${event.toObjectId})`);
           skipped++;
