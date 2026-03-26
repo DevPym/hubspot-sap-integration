@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapeo de Campos — HubSpot ↔ SAP S/4HANA | Quimica del Sur</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-2: #22262f;
+      --border: #2e3340;
+      --text: #e4e6eb;
+      --text-muted: #8b8f9a;
+      --accent-hs: #ff7a59;
+      --accent-sap: #0070f2;
+      --accent-green: #36b37e;
+      --accent-yellow: #ffab00;
+      --accent-purple: #9f7aea;
+      --accent-red: #ef4444;
+      --tag-string: #36b37e;
+      --tag-date: #ffab00;
+      --tag-code: #9f7aea;
+      --tag-sub: #60a5fa;
+      --tag-const: #8b8f9a;
+      --tag-readonly: #ef4444;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-hs), var(--accent-sap));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.5rem;
+    }
+    .header p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+    .header .badges {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.3rem 0.8rem;
+      border-radius: 100px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .badge .dot.hs { background: var(--accent-hs); }
+    .badge .dot.sap { background: var(--accent-sap); }
+    .badge .dot.green { background: var(--accent-green); }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+    .tab {
+      padding: 0.6rem 1.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .tab:hover { border-color: var(--text-muted); color: var(--text); }
+    .tab.active { border-color: var(--accent-sap); color: var(--accent-sap); background: rgba(0,112,242,0.1); }
+    .tab .emoji { margin-right: 0.3rem; }
+
+    /* Section */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      padding: 1rem 1.5rem;
+      background: var(--surface);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    .section-header .icon {
+      font-size: 2rem;
+    }
+    .section-header .info h2 {
+      font-size: 1.3rem;
+      font-weight: 600;
+    }
+    .section-header .info .subtitle {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    .section-header .info .subtitle span.hs { color: var(--accent-hs); font-weight: 600; }
+    .section-header .info .subtitle span.sap { color: var(--accent-sap); font-weight: 600; }
+
+    /* Table */
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    thead th {
+      background: var(--surface-2);
+      padding: 0.8rem 1rem;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody td {
+      padding: 0.7rem 1rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+    /* Direction column */
+    .dir {
+      text-align: center;
+      font-size: 1.1rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .dir.bi { color: var(--accent-green); }
+    .dir.hs-to-sap { color: var(--accent-hs); }
+    .dir.sap-to-hs { color: var(--accent-sap); }
+    .dir.const { color: var(--tag-const); }
+
+    /* Field name styling */
+    .field {
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      display: inline-block;
+      word-break: break-all;
+    }
+    .field.hs {
+      background: rgba(255,122,89,0.12);
+      color: var(--accent-hs);
+      border: 1px solid rgba(255,122,89,0.2);
+    }
+    .field.sap {
+      background: rgba(0,112,242,0.12);
+      color: var(--accent-sap);
+      border: 1px solid rgba(0,112,242,0.2);
+    }
+
+    /* Tags */
+    .tag {
+      display: inline-block;
+      padding: 0.1rem 0.5rem;
+      border-radius: 100px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+    .tag.string { background: rgba(54,179,126,0.15); color: var(--tag-string); }
+    .tag.date { background: rgba(255,171,0,0.15); color: var(--tag-date); }
+    .tag.code { background: rgba(159,122,234,0.15); color: var(--tag-purple); }
+    .tag.sub { background: rgba(96,165,250,0.15); color: var(--tag-sub); }
+    .tag.const { background: rgba(139,143,154,0.15); color: var(--tag-const); }
+    .tag.readonly { background: rgba(239,68,68,0.15); color: var(--tag-readonly); }
+    .tag.number { background: rgba(255,171,0,0.15); color: var(--tag-date); }
+
+    /* Transform */
+    .transform {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--accent-purple);
+      background: rgba(159,122,234,0.08);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+    }
+
+    /* Sub-table label */
+    .group-label {
+      padding: 0.5rem 1rem;
+      background: rgba(255,255,255,0.03);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .group-label td {
+      padding: 0.5rem 1rem !important;
+      border-bottom: 1px solid var(--border) !important;
+    }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      padding: 1rem 1.5rem;
+      background: var(--surface);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin-bottom: 2rem;
+      font-size: 0.82rem;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    /* Constants box */
+    .constants-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.2rem 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .constants-box h3 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 0.8rem;
+      color: var(--text-muted);
+    }
+    .constants-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 0.5rem;
+    }
+    .const-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.82rem;
+    }
+    .const-item .key {
+      font-family: monospace;
+      color: var(--accent-sap);
+      font-size: 0.78rem;
+    }
+    .const-item .val {
+      font-family: monospace;
+      color: var(--accent-green);
+      font-size: 0.78rem;
+    }
+    .const-item .eq { color: var(--text-muted); }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border);
+      margin-top: 2rem;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    @media (max-width: 768px) {
+      body { padding: 1rem; }
+      .header h1 { font-size: 1.4rem; }
+      table { font-size: 0.8rem; }
+      .legend { flex-direction: column; gap: 0.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <h1>Mapeo de Campos: HubSpot ↔ SAP S/4HANA</h1>
+    <p>Quimica del Sur &mdash; Integracion Bidireccional v1</p>
+    <div class="badges">
+      <span class="badge"><span class="dot hs"></span> HubSpot CRM v3</span>
+      <span class="badge"><span class="dot sap"></span> SAP S/4HANA OData v2</span>
+      <span class="badge"><span class="dot green"></span> 197 tests passing</span>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><span class="dir bi">↔</span> Bidireccional</div>
+    <div class="legend-item"><span class="dir hs-to-sap">→</span> HubSpot → SAP</div>
+    <div class="legend-item"><span class="dir sap-to-hs">←</span> SAP → HubSpot</div>
+    <div class="legend-item"><span class="tag string">STRING</span> Texto</div>
+    <div class="legend-item"><span class="tag date">DATE</span> Fecha</div>
+    <div class="legend-item"><span class="tag code">CODE</span> Codigo mapeado</div>
+    <div class="legend-item"><span class="tag sub">SUB-ENTITY</span> Sub-entidad SAP</div>
+    <div class="legend-item"><span class="tag const">CONSTANTE</span> Valor fijo en CREATE</div>
+    <div class="legend-item"><span class="tag readonly">READ-ONLY</span> Solo lectura</div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" onclick="showSection('contact')"><span class="emoji">👤</span> Contact ↔ BP Persona</div>
+    <div class="tab" onclick="showSection('company')"><span class="emoji">🏢</span> Company ↔ BP Organizacion</div>
+    <div class="tab" onclick="showSection('deal')"><span class="emoji">💰</span> Deal ↔ Sales Order</div>
+  </div>
+
+  <!-- ================================================================== -->
+  <!-- CONTACT -->
+  <!-- ================================================================== -->
+  <div id="contact" class="section active">
+    <div class="section-header">
+      <div class="icon">👤</div>
+      <div class="info">
+        <h2>Contact ↔ Business Partner Persona</h2>
+        <div class="subtitle">
+          <span class="hs">HubSpot Contact</span> &nbsp;↔&nbsp; <span class="sap">SAP BP (Category = 1)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Constants -->
+    <div class="constants-box">
+      <h3>⚙ Constantes SAP (solo en CREATE)</h3>
+      <div class="constants-grid">
+        <div class="const-item"><span class="key">BusinessPartnerCategory</span> <span class="eq">=</span> <span class="val">"1"</span></div>
+        <div class="const-item"><span class="key">BusinessPartnerGrouping</span> <span class="eq">=</span> <span class="val">"BP02"</span></div>
+        <div class="const-item"><span class="key">CorrespondenceLanguage</span> <span class="eq">=</span> <span class="val">"ES"</span></div>
+        <div class="const-item"><span class="key">Roles</span> <span class="eq">=</span> <span class="val">["FLCU00", "FLCU01"]</span></div>
+        <div class="const-item"><span class="key">CustomerCompany.CompanyCode</span> <span class="eq">=</span> <span class="val">"4610"</span></div>
+        <div class="const-item"><span class="key">CustomerCompany.PaymentTerms</span> <span class="eq">=</span> <span class="val">"NT30"</span></div>
+        <div class="const-item"><span class="key">CustomerCompany.ReconciliationAccount</span> <span class="eq">=</span> <span class="val">"12120100"</span></div>
+        <div class="const-item"><span class="key">CustomerSalesArea.SalesOrg</span> <span class="eq">=</span> <span class="val">"4601"</span></div>
+        <div class="const-item"><span class="key">CustomerSalesArea.DistChannel</span> <span class="eq">=</span> <span class="val">"CF"</span></div>
+        <div class="const-item"><span class="key">CustomerSalesArea.Division</span> <span class="eq">=</span> <span class="val">"10"</span></div>
+        <div class="const-item"><span class="key">CustomerSalesArea.Currency</span> <span class="eq">=</span> <span class="val">"CLP"</span></div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Propiedad HubSpot</th>
+            <th>Dir.</th>
+            <th>Campo SAP</th>
+            <th>Tipo</th>
+            <th>Transformacion</th>
+            <th>Max</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Datos personales -->
+          <tr class="group-label"><td colspan="6">DATOS PERSONALES</td></tr>
+          <tr>
+            <td><span class="field hs">firstname</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">FirstName</span></td>
+            <td><span class="tag string">STRING</span></td>
+            <td>Directo</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">lastname</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">LastName</span></td>
+            <td><span class="tag string">STRING</span></td>
+            <td>Directo</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">company</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">NaturalPersonEmployerName</span></td>
+            <td><span class="tag string">STRING</span></td>
+            <td><span class="transform">truncate()</span></td>
+            <td>35</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">hubspotId</span></td>
+            <td class="dir hs-to-sap">→</td>
+            <td><span class="field sap">BusinessPartnerIDByExtSystem</span></td>
+            <td><span class="tag string">STRING</span></td>
+            <td><span class="transform">truncate()</span></td>
+            <td>20</td>
+          </tr>
+
+          <!-- Direccion -->
+          <tr class="group-label"><td colspan="6">DIRECCION (sub-entidad to_BusinessPartnerAddress)</td></tr>
+          <tr>
+            <td><span class="field hs">address</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">StreetName</span></td>
+            <td><span class="tag sub">SUB-ENTITY</span></td>
+            <td>Directo</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">city</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">CityName</span></td>
+            <td><span class="tag sub">SUB-ENTITY</span></td>
+            <td>Directo</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">zip</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">PostalCode</span></td>
+            <td><span class="tag sub">SUB-ENTITY</span></td>
+            <td>Directo</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">country</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">Country</span></td>
+            <td><span class="tag code">CODE</span></td>
+            <td><span class="transform">normalizeCountryCode()</span></td>
+            <td>2</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">state</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">Region</span></td>
+            <td><span class="tag code">CODE</span></td>
+            <td><span class="transform">normalizeRegionCode()</span></td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">comuna</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">District</span></td>
+            <td><span class="tag sub">SUB-ENTITY</span></td>
+            <td>Directo</td>
+            <td>—</td>
+          </tr>
+
+          <!-- Comunicacion -->
+          <tr class="group-label"><td colspan="6">COMUNICACION (sub-entidades de Address)</td></tr>
+          <tr>
+            <td><span class="field hs">email</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">to_EmailAddress.EmailAddress</span></td>
+            <td><span class="tag sub">SUB-ENTITY</span></td>
+            <td>Directo (OrdinalNumber='1')</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">phone</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">to_PhoneNumber.PhoneNumber</span></td>
+            <td><span class="tag sub">SUB-ENTITY</span></td>
+            <td><span class="transform">parsePhone()</span> Type=1</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">mobilephone</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">to_MobilePhoneNumber.PhoneNumber</span></td>
+            <td><span class="tag sub">SUB-ENTITY</span></td>
+            <td><span class="transform">parsePhone()</span> Type=3</td>
+            <td>—</td>
+          </tr>
+
+          <!-- Vinculaciones -->
+          <tr class="group-label"><td colspan="6">VINCULACIONES</td></tr>
+          <tr>
+            <td><span class="field hs">associatedCompany</span><br><span style="color:var(--text-muted);font-size:0.75rem">HS→SAP: via company (texto)</span><br><span style="color:var(--text-muted);font-size:0.75rem">SAP→HS: Search API + asociacion formal</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">NaturalPersonEmployerName</span><br><span style="color:var(--text-muted);font-size:0.75rem">→ busca Company por nombre y crea asociacion Contact↔Company en HubSpot</span></td>
+            <td><span class="tag sub">SUB-ENTITY</span></td>
+            <td><span class="transform">syncContactCompanyAssociation()</span></td>
+            <td>35</td>
+          </tr>
+
+          <!-- Timestamp -->
+          <tr class="group-label"><td colspan="6">TIMESTAMP (Last-Write-Wins)</td></tr>
+          <tr>
+            <td><span class="field hs">lastmodifieddate</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">LastChangeDate + LastChangeTime</span></td>
+            <td><span class="tag date">DATE</span></td>
+            <td><span class="transform">sapDateTimeToMs()</span></td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ================================================================== -->
+  <!-- COMPANY -->
+  <!-- ================================================================== -->
+  <div id="company" class="section">
+    <div class="section-header">
+      <div class="icon">🏢</div>
+      <div class="info">
+        <h2>Company ↔ Business Partner Organizacion</h2>
+        <div class="subtitle">
+          <span class="hs">HubSpot Company</span> &nbsp;↔&nbsp; <span class="sap">SAP BP (Category = 2)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="constants-box">
+      <h3>⚙ Constantes SAP (solo en CREATE)</h3>
+      <div class="constants-grid">
+        <div class="const-item"><span class="key">BusinessPartnerCategory</span> <span class="eq">=</span> <span class="val">"2"</span></div>
+        <div class="const-item"><span class="key">BusinessPartnerGrouping</span> <span class="eq">=</span> <span class="val">"BP02"</span></div>
+        <div class="const-item"><span class="key">CorrespondenceLanguage</span> <span class="eq">=</span> <span class="val">"ES"</span></div>
+        <div class="const-item"><span class="key">Roles</span> <span class="eq">=</span> <span class="val">["FLCU00", "FLCU01"]</span></div>
+        <div class="const-item"><span class="key">BPTaxType</span> <span class="eq">=</span> <span class="val">"CO3" (RUT Chile)</span></div>
+        <div class="const-item"><span class="key">CustomerCompany.CompanyCode</span> <span class="eq">=</span> <span class="val">"4610"</span></div>
+        <div class="const-item"><span class="key">CustomerCompany.ReconciliationAccount</span> <span class="eq">=</span> <span class="val">"12120100"</span></div>
+        <div class="const-item"><span class="key">CustomerSalesArea.SalesOrg</span> <span class="eq">=</span> <span class="val">"4601"</span></div>
+        <div class="const-item"><span class="key">CustomerSalesArea.DistChannel</span> <span class="eq">=</span> <span class="val">"CF"</span></div>
+        <div class="const-item"><span class="key">CustomerSalesArea.Division</span> <span class="eq">=</span> <span class="val">"10"</span></div>
+        <div class="const-item"><span class="key">CustomerSalesArea.Currency</span> <span class="eq">=</span> <span class="val">"CLP"</span></div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Propiedad HubSpot</th>
+            <th>Dir.</th>
+            <th>Campo SAP</th>
+            <th>Tipo</th>
+            <th>Transformacion</th>
+            <th>Max</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="group-label"><td colspan="6">INFORMACION BASICA</td></tr>
+          <tr>
+            <td><span class="field hs">name</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">OrganizationBPName1</span></td>
+            <td><span class="tag string">STRING</span></td>
+            <td><span class="transform">truncate()</span></td>
+            <td>40</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">description</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">OrganizationBPName2</span></td>
+            <td><span class="tag string">STRING</span></td>
+            <td><span class="transform">truncate()</span> (overflow)</td>
+            <td>40</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">razon_social</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">OrganizationBPName3</span> + <span class="field sap">SearchTerm1</span></td>
+            <td><span class="tag string">STRING</span></td>
+            <td><span class="transform">truncate()</span> Name3=40, Search=20</td>
+            <td>40 / 20</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">founded_year</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">OrganizationFoundationDate</span></td>
+            <td><span class="tag date">DATE</span></td>
+            <td><span class="transform">yearToDate()</span> "2005" → "2005-01-01"</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">hubspotId</span></td>
+            <td class="dir hs-to-sap">→</td>
+            <td><span class="field sap">BusinessPartnerIDByExtSystem</span></td>
+            <td><span class="tag string">STRING</span></td>
+            <td><span class="transform">truncate()</span></td>
+            <td>20</td>
+          </tr>
+
+          <tr class="group-label"><td colspan="6">DIRECCION (sub-entidad to_BusinessPartnerAddress)</td></tr>
+          <tr>
+            <td><span class="field hs">address</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">StreetName</span></td>
+            <td><span class="tag sub">SUB-ENTITY</span></td>
+            <td>Directo</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">city</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">CityName</span></td>
+            <td><span class="tag sub">SUB-ENTITY</span></td>
+            <td>Directo</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">zip</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">PostalCode</span></td>
+            <td><span class="tag sub">SUB-ENTITY</span></td>
+            <td>Directo</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">country</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">Country</span></td>
+            <td><span class="tag code">CODE</span></td>
+            <td><span class="transform">normalizeCountryCode()</span></td>
+            <td>2</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">state</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">Region</span></td>
+            <td><span class="tag code">CODE</span></td>
+            <td><span class="transform">normalizeRegionCode()</span></td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">comuna</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">District</span></td>
+            <td><span class="tag sub">SUB-ENTITY</span></td>
+            <td>Directo</td>
+            <td>—</td>
+          </tr>
+
+          <tr class="group-label"><td colspan="6">COMUNICACION Y FISCAL</td></tr>
+          <tr>
+            <td><span class="field hs">phone</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">to_PhoneNumber.PhoneNumber</span></td>
+            <td><span class="tag sub">SUB-ENTITY</span></td>
+            <td><span class="transform">parsePhone()</span> Type=1</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">rut_empresa</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">BPTaxNumber</span> (BPTaxType=CO3)</td>
+            <td><span class="tag code">CODE</span></td>
+            <td><span class="transform">normalizeRut()</span> quita puntos</td>
+            <td>11</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">condicion_venta</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">CustomerCompany.PaymentTerms</span> + <span class="field sap">CustomerSalesArea.CustomerPaymentTerms</span></td>
+            <td><span class="tag code">CODE</span></td>
+            <td><span class="transform">paymentTermsToSap()</span> "30 dias" → "NT30"</td>
+            <td>4</td>
+          </tr>
+
+          <tr class="group-label"><td colspan="6">TIMESTAMP (Last-Write-Wins)</td></tr>
+          <tr>
+            <td><span class="field hs">hs_lastmodifieddate</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">LastChangeDate + LastChangeTime</span></td>
+            <td><span class="tag date">DATE</span></td>
+            <td><span class="transform">sapDateTimeToMs()</span></td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ================================================================== -->
+  <!-- DEAL -->
+  <!-- ================================================================== -->
+  <div id="deal" class="section">
+    <div class="section-header">
+      <div class="icon">💰</div>
+      <div class="info">
+        <h2>Deal ↔ Sales Order</h2>
+        <div class="subtitle">
+          <span class="hs">HubSpot Deal</span> &nbsp;↔&nbsp; <span class="sap">SAP Sales Order (Type = OR)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="constants-box">
+      <h3>⚙ Constantes SAP (solo en CREATE)</h3>
+      <div class="constants-grid">
+        <div class="const-item"><span class="key">SalesOrderType</span> <span class="eq">=</span> <span class="val">"OR"</span></div>
+        <div class="const-item"><span class="key">SalesOrganization</span> <span class="eq">=</span> <span class="val">"4601"</span></div>
+        <div class="const-item"><span class="key">DistributionChannel</span> <span class="eq">=</span> <span class="val">"CF"</span></div>
+        <div class="const-item"><span class="key">OrganizationDivision</span> <span class="eq">=</span> <span class="val">"10"</span></div>
+        <div class="const-item"><span class="key">to_Item.SalesOrderItem</span> <span class="eq">=</span> <span class="val">"10"</span></div>
+        <div class="const-item"><span class="key">to_Item.Material</span> <span class="eq">=</span> <span class="val">"Q01"</span></div>
+        <div class="const-item"><span class="key">to_Item.RequestedQuantityUnit</span> <span class="eq">=</span> <span class="val">"L"</span></div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Propiedad HubSpot</th>
+            <th>Dir.</th>
+            <th>Campo SAP</th>
+            <th>Tipo</th>
+            <th>Transformacion</th>
+            <th>Max</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="group-label"><td colspan="6">DATOS DEL PEDIDO</td></tr>
+          <tr>
+            <td><span class="field hs">orden_de_compra_o_contratoo</span><br><span style="color:var(--text-muted);font-size:0.75rem">prioridad sobre dealname</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">PurchaseOrderByCustomer</span></td>
+            <td><span class="tag string">STRING</span></td>
+            <td><span class="transform">truncate()</span></td>
+            <td>35</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">dealname</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">PurchaseOrderByCustomer</span></td>
+            <td><span class="tag string">STRING</span></td>
+            <td><span class="transform">truncate()</span> (fallback)</td>
+            <td>35</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">amount</span></td>
+            <td class="dir sap-to-hs">←</td>
+            <td><span class="field sap">TotalNetAmount</span></td>
+            <td><span class="tag readonly">READ-ONLY</span></td>
+            <td>Calculado por SAP desde items</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">deal_currency_code</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">TransactionCurrency</span></td>
+            <td><span class="tag code">CODE</span></td>
+            <td>Directo (fallback "CLP")</td>
+            <td>3</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">condicion_de_pago</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">CustomerPaymentTerms</span></td>
+            <td><span class="tag code">CODE</span></td>
+            <td><span class="transform">paymentTermsToSap()</span> / <span class="transform">paymentTermsToHubSpot()</span></td>
+            <td>4</td>
+          </tr>
+
+          <tr class="group-label"><td colspan="6">FECHAS</td></tr>
+          <tr>
+            <td><span class="field hs">fecha_de_entrega</span><br><span style="color:var(--text-muted);font-size:0.75rem">prioridad sobre closedate</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">RequestedDeliveryDate</span></td>
+            <td><span class="tag date">DATE</span></td>
+            <td><span class="transform">isoToSapDate()</span> / <span class="transform">sapDateToISO()</span></td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="field hs">closedate</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">RequestedDeliveryDate</span></td>
+            <td><span class="tag date">DATE</span></td>
+            <td><span class="transform">isoToSapDate()</span> (fallback)</td>
+            <td>—</td>
+          </tr>
+
+          <tr class="group-label"><td colspan="6">ITEMS (sub-entidad to_Item)</td></tr>
+          <tr>
+            <td><span class="field hs">cuanto_es_la_cantidad_requerida_del_producto_</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">to_Item[0].RequestedQuantity</span></td>
+            <td><span class="tag number">NUMBER</span></td>
+            <td>Directo (fallback "1")</td>
+            <td>—</td>
+          </tr>
+
+          <tr class="group-label"><td colspan="6">VINCULACIONES</td></tr>
+          <tr>
+            <td><span class="field hs">associatedCompany</span><br><span style="color:var(--text-muted);font-size:0.75rem">HS→SAP: associations API + id_map</span><br><span style="color:var(--text-muted);font-size:0.75rem">SAP→HS: SoldToParty → asociacion formal</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">SoldToParty</span></td>
+            <td><span class="tag code">CODE</span></td>
+            <td><span class="transform">resolveCompanyForDeal()</span> / <span class="transform">syncDealCompanyAssociation()</span></td>
+            <td>10</td>
+          </tr>
+
+          <tr class="group-label"><td colspan="6">TIMESTAMP (Last-Write-Wins)</td></tr>
+          <tr>
+            <td><span class="field hs">hs_lastmodifieddate</span></td>
+            <td class="dir bi">↔</td>
+            <td><span class="field sap">LastChangeDateTime</span></td>
+            <td><span class="tag date">DATE</span></td>
+            <td><span class="transform">sapDateTimeOffsetToMs()</span></td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>Actualizado el 26 de marzo de 2026 &mdash; hubspot-sap-integration v1 &mdash; Quimica del Sur</p>
+    <p style="margin-top:0.5rem">
+      Condiciones de pago:
+      <span class="transform" style="margin:0 0.3rem">Pago contado ↔ NT00</span>
+      <span class="transform" style="margin:0 0.3rem">30 dias ↔ NT30</span>
+      <span class="transform" style="margin:0 0.3rem">45 dias ↔ NT45</span>
+      <span class="transform" style="margin:0 0.3rem">60 dias ↔ NT60</span>
+      <span class="transform" style="margin:0 0.3rem">90 dias ↔ NT90</span>
+    </p>
+  </div>
+
+  <script>
+    function showSection(id) {
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      event.currentTarget.classList.add('active');
+    }
+  </script>
+</body>
+</html>
