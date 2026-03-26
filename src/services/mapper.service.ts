@@ -62,7 +62,7 @@ import { env } from '../config/env';
  * Se pueden cambiar sin modificar código (solo env vars en Railway).
  *
  * Valores por defecto verificados en producción de Química Sur (2026-03-24):
- *   TAX_TYPE: CL1 (RUT Chile, NO CO3 como decía la doc original)
+ *   TAX_TYPE: CO3 (RUT Chile — verificado en producción con BPs 100000030, 100000031)
  *   RECONCILIATION_ACCOUNT: 10200600 (NO 12120100)
  */
 export const SAP_CONSTANTS = {
@@ -274,6 +274,64 @@ export function normalizeRegionCode(region: string | undefined, country?: string
 }
 
 // ---------------------------------------------------------------------------
+// Diccionario Condición de Pago HubSpot ↔ SAP
+// ---------------------------------------------------------------------------
+
+/**
+ * HubSpot usa texto legible ("30 días") y SAP usa códigos ("NT30").
+ * Mapeo bidireccional verificado contra las opciones reales de HubSpot:
+ *   "Pago contado", "30 días", "45 días", "60 días", "90 días"
+ */
+const PAYMENT_TERMS_HS_TO_SAP: Record<string, string> = {
+  'pago contado': 'NT00',
+  '30 días': 'NT30',
+  '30 dias': 'NT30',
+  '45 días': 'NT45',
+  '45 dias': 'NT45',
+  '60 días': 'NT60',
+  '60 dias': 'NT60',
+  '90 días': 'NT90',
+  '90 dias': 'NT90',
+  // También aceptar códigos SAP directamente
+  'nt00': 'NT00',
+  'nt30': 'NT30',
+  'nt45': 'NT45',
+  'nt60': 'NT60',
+  'nt90': 'NT90',
+};
+
+const PAYMENT_TERMS_SAP_TO_HS: Record<string, string> = {
+  'NT00': 'Pago contado',
+  'NT30': '30 días',
+  'NT45': '45 días',
+  'NT60': '60 días',
+  'NT90': '90 días',
+};
+
+/**
+ * Convierte condición de pago de HubSpot (texto) a código SAP.
+ * Si ya es un código SAP válido, lo retorna tal cual.
+ * Si no se reconoce, retorna undefined para no enviar valor inválido.
+ */
+export function paymentTermsToSap(hsValue: string | undefined): string | undefined {
+  if (!hsValue) return undefined;
+  const normalized = PAYMENT_TERMS_HS_TO_SAP[hsValue.toLowerCase().trim()];
+  if (normalized) return normalized;
+  // Si ya parece ser código SAP (NT##), retornar tal cual
+  if (/^NT\d{2}$/i.test(hsValue.trim())) return hsValue.trim().toUpperCase();
+  console.warn(`[mapper] ⚠️ Condición de pago no reconocida: "${hsValue}"`);
+  return undefined;
+}
+
+/**
+ * Convierte código de condición de pago SAP a texto HubSpot.
+ */
+export function paymentTermsToHubSpot(sapCode: string | undefined): string | undefined {
+  if (!sapCode) return undefined;
+  return PAYMENT_TERMS_SAP_TO_HS[sapCode.toUpperCase().trim()];
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -308,6 +366,23 @@ export function cleanNulls<T>(obj: T): T {
 export function truncate(value: string | undefined, maxLength: number): string | undefined {
   if (!value) return undefined;
   return value.substring(0, maxLength);
+}
+
+/**
+ * Normaliza un RUT chileno para SAP (max 11 caracteres en BPTaxNumber).
+ *
+ * HubSpot puede tener formatos como: "99.404.490-0", "99404490-0", "994044900".
+ * SAP acepta max 11 chars. Removemos puntos y dejamos el guión + dígito verificador.
+ *
+ * Ejemplo:
+ *   "99.404.490-0"  → "99404490-0" (10 chars, OK)
+ *   "11.111.111-1"  → "11111111-1" (10 chars, OK)
+ *   "99404490-0"    → "99404490-0" (sin cambio)
+ */
+export function normalizeRut(rut: string | undefined): string | undefined {
+  if (!rut) return undefined;
+  // Remover puntos, mantener guión y dígito verificador
+  return rut.replace(/\./g, '').trim();
 }
 
 /**
@@ -653,7 +728,7 @@ export function companyToSapBP(
 
   // Tax (RUT) si existe
   const taxEntries = props.rut_empresa
-    ? [{ BPTaxType: SAP_CONSTANTS.TAX_TYPE_RUT, BPTaxNumber: props.rut_empresa }]
+    ? [{ BPTaxType: SAP_CONSTANTS.TAX_TYPE_RUT, BPTaxNumber: normalizeRut(props.rut_empresa)! }]
     : [];
 
   // PaymentTerms: usar condicion_venta custom o default NT30
@@ -767,7 +842,7 @@ export function dealToSalesOrder(
     PurchaseOrderByCustomer: purchaseOrder,
     TransactionCurrency: props.deal_currency_code || SAP_CONSTANTS.DEFAULT_CURRENCY,
     RequestedDeliveryDate: deliveryDate,
-    CustomerPaymentTerms: props.condicion_de_pago,
+    CustomerPaymentTerms: paymentTermsToSap(props.condicion_de_pago),
     to_Item: { results: items },
   };
 
@@ -799,7 +874,8 @@ export function dealToSalesOrderUpdate(
     update.TransactionCurrency = props.deal_currency_code;
   }
   if (props.condicion_de_pago !== undefined) {
-    update.CustomerPaymentTerms = props.condicion_de_pago;
+    const sapTerms = paymentTermsToSap(props.condicion_de_pago);
+    if (sapTerms) update.CustomerPaymentTerms = sapTerms;
   }
 
   return update;
@@ -915,7 +991,9 @@ export function salesOrderToDealUpdate(
     if (iso) props.closedate = iso.split('T')[0]; // Solo fecha YYYY-MM-DD
   }
   if (so.TransactionCurrency) props.deal_currency_code = so.TransactionCurrency;
-  if (so.CustomerPaymentTerms) props.condicion_de_pago = so.CustomerPaymentTerms;
+  if (so.CustomerPaymentTerms) {
+    props.condicion_de_pago = paymentTermsToHubSpot(so.CustomerPaymentTerms) || so.CustomerPaymentTerms;
+  }
   if (so.RequestedDeliveryDate) {
     const iso = sapDateToISO(so.RequestedDeliveryDate);
     if (iso) props.fecha_de_entrega = iso.split('T')[0];

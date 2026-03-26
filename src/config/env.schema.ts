@@ -33,8 +33,8 @@ export const envSchema = z.object({
   SAP_CORRESPONDENCE_LANGUAGE: z.string().length(2).default('ES'),
   /** Cuenta contable de conciliación de deudores (plan de cuentas SAP) */
   SAP_RECONCILIATION_ACCOUNT: z.string().min(1).default('10200600'),
-  /** Tipo de número fiscal. CL1=RUT Chile, AR1D=CUIT Argentina */
-  SAP_TAX_TYPE: z.string().min(1).default('CL1'),
+  /** Tipo de número fiscal. CO3=RUT Chile (verificado prod), CL1=alternativo */
+  SAP_TAX_TYPE: z.string().min(1).default('CO3'),
   /** Roles BP separados por coma. FLCU00=cliente general, FLCU01=cliente ventas */
   SAP_BP_ROLES: z.string().min(1).default('FLCU00,FLCU01'),
   /** Condición de pago por defecto. NT00=inmediato, NT30=30 días, NT60=60 días */
