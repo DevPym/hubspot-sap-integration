@@ -52,6 +52,9 @@ import type {
   SapSalesOrder,
   ODataListResponse,
 } from '../adapters/sap/sap.types';
+import type {
+  HubSpotAssociationsResponse,
+} from '../adapters/hubspot/hubspot.types';
 import type { Prisma } from '../generated/prisma/client';
 
 // ---------------------------------------------------------------------------
@@ -275,6 +278,17 @@ async function syncBPToHubSpot(bp: SapBusinessPartner): Promise<void> {
 
     console.log(`[sap-poller] ✅ UPDATE ${entityType} SAP:${sapId} → HS:${mapping.hubspotId}`);
 
+    // 🔗 Sincronizar asociación Contact↔Company basada en NaturalPersonEmployerName
+    if (entityType === 'CONTACT' && bp.NaturalPersonEmployerName) {
+      try {
+        await syncContactCompanyAssociation(mapping.hubspotId, bp.NaturalPersonEmployerName);
+      } catch (assocError) {
+        // No bloquear la sync principal por error en asociación
+        const assocMsg = assocError instanceof Error ? assocError.message : String(assocError);
+        console.error(`[sap-poller] ⚠️ Error sincronizando asociación Contact↔Company: ${assocMsg}`);
+      }
+    }
+
     // Log: SUCCESS
     await syncLogRepo.create({
       idMapId: mapping.id,
@@ -339,6 +353,167 @@ async function syncBPToHubSpot(bp: SapBusinessPartner): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers de asociaciones HubSpot
+// ---------------------------------------------------------------------------
+
+/**
+ * Sincroniza la asociación Deal↔Company en HubSpot basándose en SoldToParty de SAP.
+ *
+ * Flujo:
+ *   1. Leer SoldToParty del SalesOrder (SAP BP ID de la Company)
+ *   2. Buscar ese SAP BP ID en id_map → obtener hubspotId de la Company
+ *   3. Leer asociaciones actuales del Deal en HubSpot
+ *   4. Si no hay asociación o es diferente → crear la nueva asociación
+ *
+ * ⚠️ No falla si la asociación no se puede crear — solo loguea el error.
+ * ⚠️ Usa API v4 de asociaciones (PUT /crm/v4/objects/deals/{}/associations/companies/{})
+ *    con fallback a v3 (PUT /crm/v3/objects/deals/{}/associations/company/{}/deal_to_company)
+ */
+async function syncDealCompanyAssociation(
+  dealHubSpotId: string,
+  soldToParty: string,
+): Promise<void> {
+  // 1. Buscar la Company en id_map por el SAP BP ID (SoldToParty)
+  const companyMapping = await idMapRepo.findBySapId('COMPANY', soldToParty);
+  if (!companyMapping) {
+    // La Company no está mapeada — posiblemente creada directamente en SAP
+    console.log(`[sap-poller] ℹ️ SoldToParty ${soldToParty} no encontrada en id_map — asociación Deal↔Company no sincronizada`);
+    return;
+  }
+
+  const companyHubSpotId = companyMapping.hubspotId;
+
+  // 2. Leer asociaciones actuales del Deal en HubSpot
+  try {
+    const assocResponse = await hubspotClient.get<HubSpotAssociationsResponse>(
+      `/crm/v3/objects/deals/${dealHubSpotId}/associations/company`,
+    );
+
+    const currentAssociations = assocResponse.data.results || [];
+
+    // 3. ¿La Company ya está asociada?
+    const alreadyAssociated = currentAssociations.some(
+      (a) => a.id === companyHubSpotId,
+    );
+
+    if (alreadyAssociated) {
+      return; // Ya está vinculada — nada que hacer
+    }
+  } catch {
+    // Si falla el GET de asociaciones, intentar crear de todas formas
+  }
+
+  // 4. Crear la asociación Deal→Company
+  try {
+    // Intentar con API v4 primero (más robusta)
+    await hubspotClient.put(
+      `/crm/v4/objects/deals/${dealHubSpotId}/associations/companies/${companyHubSpotId}`,
+      [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 5 }], // 5 = deal_to_company
+    );
+    console.log(`[sap-poller] 🔗 Asociación Deal↔Company creada: HS Deal ${dealHubSpotId} → HS Company ${companyHubSpotId}`);
+  } catch {
+    // Fallback a v3
+    try {
+      await hubspotClient.put(
+        `/crm/v3/objects/deals/${dealHubSpotId}/associations/company/${companyHubSpotId}/deal_to_company`,
+      );
+      console.log(`[sap-poller] 🔗 Asociación Deal↔Company creada (v3): HS Deal ${dealHubSpotId} → HS Company ${companyHubSpotId}`);
+    } catch (v3Error) {
+      const msg = v3Error instanceof Error ? v3Error.message : String(v3Error);
+      console.error(`[sap-poller] ⚠️ No se pudo crear asociación Deal↔Company: ${msg}`);
+    }
+  }
+}
+
+/**
+ * Sincroniza la asociación Contact↔Company en HubSpot.
+ *
+ * En SAP no existe un vínculo formal BP Persona → BP Organización.
+ * El campo NaturalPersonEmployerName es texto libre (max 35 chars).
+ *
+ * Estrategia: Buscar en id_map todas las Companies sincronizadas cuyo nombre
+ * coincida con NaturalPersonEmployerName. Si hay match exacto → crear asociación.
+ *
+ * ⚠️ Esto es best-effort — si no hay match, no se crea la asociación.
+ */
+async function syncContactCompanyAssociation(
+  contactHubSpotId: string,
+  employerName: string | undefined,
+): Promise<void> {
+  if (!employerName || employerName.trim() === '') return;
+
+  const trimmedName = employerName.trim();
+
+  // Buscar en HubSpot Companies por nombre exacto usando la Search API
+  try {
+    const searchResponse = await hubspotClient.post<{
+      results: Array<{ id: string; properties: { name?: string } }>;
+    }>(
+      '/crm/v3/objects/companies/search',
+      {
+        filterGroups: [{
+          filters: [{
+            propertyName: 'name',
+            operator: 'EQ',
+            value: trimmedName,
+          }],
+        }],
+        properties: ['name'],
+        limit: 1,
+      },
+    );
+
+    const companies = searchResponse.data.results || [];
+    if (companies.length === 0) {
+      return; // No hay Company con ese nombre en HubSpot
+    }
+
+    const companyHubSpotId = companies[0].id;
+
+    // Verificar que esta Company está en id_map (es una Company sincronizada)
+    const companyMapping = await idMapRepo.findByHubSpotId('COMPANY', companyHubSpotId);
+    if (!companyMapping) {
+      return; // Company existe en HubSpot pero no está sincronizada — no vincular
+    }
+
+    // Verificar si ya existe la asociación
+    const assocResponse = await hubspotClient.get<HubSpotAssociationsResponse>(
+      `/crm/v3/objects/contacts/${contactHubSpotId}/associations/company`,
+    );
+
+    const currentAssociations = assocResponse.data.results || [];
+    const alreadyAssociated = currentAssociations.some(
+      (a) => a.id === companyHubSpotId,
+    );
+
+    if (alreadyAssociated) return;
+
+    // Crear la asociación Contact→Company
+    try {
+      await hubspotClient.put(
+        `/crm/v4/objects/contacts/${contactHubSpotId}/associations/companies/${companyHubSpotId}`,
+        [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 1 }], // 1 = contact_to_company
+      );
+      console.log(`[sap-poller] 🔗 Asociación Contact↔Company creada: HS Contact ${contactHubSpotId} → HS Company ${companyHubSpotId} (por NaturalPersonEmployerName="${trimmedName}")`);
+    } catch {
+      // Fallback a v3
+      try {
+        await hubspotClient.put(
+          `/crm/v3/objects/contacts/${contactHubSpotId}/associations/company/${companyHubSpotId}/contact_to_company`,
+        );
+        console.log(`[sap-poller] 🔗 Asociación Contact↔Company creada (v3): HS Contact ${contactHubSpotId} → HS Company ${companyHubSpotId}`);
+      } catch (v3Error) {
+        const msg = v3Error instanceof Error ? v3Error.message : String(v3Error);
+        console.error(`[sap-poller] ⚠️ No se pudo crear asociación Contact↔Company: ${msg}`);
+      }
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`[sap-poller] ⚠️ Error buscando Company por nombre "${trimmedName}": ${msg}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Sync SalesOrder → HubSpot
 // ---------------------------------------------------------------------------
 
@@ -380,6 +555,17 @@ async function syncSalesOrderToHubSpot(so: SapSalesOrder): Promise<void> {
     );
 
     console.log(`[sap-poller] ✅ UPDATE DEAL SAP:${sapId} → HS:${mapping.hubspotId}`);
+
+    // 🔗 Sincronizar asociación Deal↔Company basada en SoldToParty
+    if (so.SoldToParty) {
+      try {
+        await syncDealCompanyAssociation(mapping.hubspotId, so.SoldToParty);
+      } catch (assocError) {
+        // No bloquear la sync principal por error en asociación
+        const assocMsg = assocError instanceof Error ? assocError.message : String(assocError);
+        console.error(`[sap-poller] ⚠️ Error sincronizando asociación Deal↔Company: ${assocMsg}`);
+      }
+    }
 
     await syncLogRepo.create({
       idMapId: mapping.id,
