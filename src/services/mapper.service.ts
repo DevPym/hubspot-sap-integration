@@ -388,6 +388,25 @@ export function normalizeRut(rut: string | undefined): string | undefined {
 }
 
 /**
+ * Formatea un RUT de SAP para display en HubSpot (agrega puntos de miles).
+ *
+ * SAP almacena: "77888999-0" → HubSpot muestra: "77.888.999-0"
+ * SAP almacena: "76244275-K" → HubSpot muestra: "76.244.275-K"
+ * SAP almacena: "8551408-0"  → HubSpot muestra: "8.551.408-0"
+ *
+ * Si el RUT ya tiene puntos, lo retorna sin cambios.
+ * Si no tiene guión, lo retorna tal cual (formato legacy).
+ */
+export function formatRutForHubSpot(rut: string | undefined): string | undefined {
+  if (!rut) return undefined;
+  const clean = rut.replace(/\./g, '').trim(); // limpiar puntos si los tiene
+  if (!clean.includes('-')) return clean; // sin guión → formato legacy, retornar como está
+  const [body, dv] = clean.split('-');
+  const formatted = body.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${formatted}-${dv}`;
+}
+
+/**
  * Parsea un número de teléfono para separar código de país y número local.
  *
  * SAP requiere el código de país en DestinationLocationCountry (ISO 2 letras),
@@ -998,7 +1017,7 @@ export function sapBPToCompanyUpdate(
     if (year && !isNaN(parseInt(year, 10))) props.founded_year = year;
   }
   if (phone) props.phone = phone;
-  if (rut) props.rut_empresa = rut;
+  if (rut) props.rut_empresa = formatRutForHubSpot(rut) || rut;
 
   if (address) {
     if (address.StreetName) props.address = address.StreetName;

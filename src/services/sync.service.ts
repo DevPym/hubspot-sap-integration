@@ -447,7 +447,11 @@ async function handleCreate(
       );
     }
 
-    const payload = mapper.dealToSalesOrder(deal.properties, sapCompanyId);
+    // ⭐ Obtener Contact asociado al Deal (para Partner AP en SalesOrder)
+    // No es obligatorio — si falta, la SalesOrder se crea sin Contact Person
+    const sapContactBPId = await resolveContactForDeal(hubspotId);
+
+    const payload = mapper.dealToSalesOrder(deal.properties, sapCompanyId, sapContactBPId || undefined);
     outboundPayload = toJson(payload);
 
     await syncLogRepo.create({
@@ -713,4 +717,42 @@ async function resolveCompanyForDeal(dealHubSpotId: string): Promise<string | nu
   }
 
   return companyMap.sapId;
+}
+
+/**
+ * Resuelve el SAP Business Partner ID del Contact asociado a un Deal.
+ *
+ * Usado para crear el Partner con PartnerFunction='AP' (Contact Person)
+ * en la SalesOrder. NO es obligatorio — si no se encuentra, la SalesOrder
+ * se crea sin Contact Person.
+ *
+ * @returns SAP BP ID del Contact o null si no hay Contact asociado/sincronizado
+ */
+async function resolveContactForDeal(dealHubSpotId: string): Promise<string | null> {
+  try {
+    const assocResponse = await hubspotClient.get<HubSpotAssociationsResponse>(
+      `${HUBSPOT_ENDPOINTS.DEAL}/${dealHubSpotId}/associations/contact`,
+    );
+
+    const associations = assocResponse.data.results;
+    if (!associations || associations.length === 0) {
+      return null;
+    }
+
+    // Tomar el primer Contact asociado
+    const contactHubSpotId = associations[0].id;
+
+    // Buscar en id_map
+    const contactMap = await idMapRepo.findByHubSpotId('CONTACT', contactHubSpotId);
+    if (!contactMap) {
+      console.log(`[sync] Contact ${contactHubSpotId} del Deal ${dealHubSpotId} no tiene mapping SAP aún — SalesOrder se crea sin Contact Person`);
+      return null;
+    }
+
+    return contactMap.sapId;
+  } catch {
+    // No bloquear la creación de la SalesOrder por error en asociación
+    console.warn(`[sync] ⚠️ No se pudo resolver Contact para Deal ${dealHubSpotId} — SalesOrder se crea sin Contact Person`);
+    return null;
+  }
 }
