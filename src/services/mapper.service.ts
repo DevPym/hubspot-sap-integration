@@ -388,22 +388,71 @@ export function normalizeRut(rut: string | undefined): string | undefined {
 }
 
 /**
- * Formatea un RUT de SAP para display en HubSpot (agrega puntos de miles).
+ * Formatea un RUT de SAP al formato estándar chileno para HubSpot.
  *
- * SAP almacena: "77888999-0" → HubSpot muestra: "77.888.999-0"
- * SAP almacena: "76244275-K" → HubSpot muestra: "76.244.275-K"
- * SAP almacena: "8551408-0"  → HubSpot muestra: "8.551.408-0"
+ * Formato objetivo (regex HubSpot): ^(?:\d{1,2}\.\d{3}\.\d{3}-[\dkK])$
+ *   - 7 u 8 dígitos de body con puntos de miles
+ *   - Guión separador
+ *   - Dígito verificador (0-9, k, K)
  *
- * Si el RUT ya tiene puntos, lo retorna sin cambios.
- * Si no tiene guión, lo retorna tal cual (formato legacy).
+ * Ejemplos:
+ *   SAP "77888999-0"     → HubSpot "77.888.999-0"   ✅
+ *   SAP "76244275-K"     → HubSpot "76.244.275-K"   ✅
+ *   SAP "8551408-0"      → HubSpot "8.551.408-0"    ✅
+ *   SAP "99.587.349-0"   → HubSpot "99.587.349-0"   ✅ (ya formateado)
+ *   SAP "12372"           → undefined (formato legacy sin DV, no convertible)
+ *
+ * @returns RUT formateado o undefined si no se puede convertir al formato válido
  */
+const HUBSPOT_RUT_REGEX = /^(?:\d{1,2}\.\d{3}\.\d{3}-[\dkK])$/;
+
 export function formatRutForHubSpot(rut: string | undefined): string | undefined {
   if (!rut) return undefined;
-  const clean = rut.replace(/\./g, '').trim(); // limpiar puntos si los tiene
-  if (!clean.includes('-')) return clean; // sin guión → formato legacy, retornar como está
-  const [body, dv] = clean.split('-');
+
+  // 1. Limpiar: quitar puntos, espacios
+  const clean = rut.replace(/\./g, '').trim();
+  if (!clean) return undefined;
+
+  // 2. Separar body y dígito verificador (DV)
+  let body: string;
+  let dv: string;
+
+  if (clean.includes('-')) {
+    const parts = clean.split('-');
+    if (parts.length !== 2) return undefined;
+    body = parts[0];
+    dv = parts[1];
+  } else {
+    // Sin guión: último char como DV solo si body queda con 7-8 dígitos
+    const lastChar = clean.slice(-1);
+    if (!/[\dkK]/.test(lastChar)) return undefined;
+    body = clean.slice(0, -1);
+    dv = lastChar;
+  }
+
+  // 3. Validar body: solo dígitos, 7 u 8 chars (RUT chileno válido)
+  if (!/^\d{7,8}$/.test(body)) {
+    console.warn(`[mapper] ⚠️ RUT body inválido: "${body}" (se esperan 7-8 dígitos). Original: "${rut}"`);
+    return undefined;
+  }
+
+  // 4. Validar DV: exactamente 1 char (0-9, k, K)
+  if (!/^[\dkK]$/.test(dv)) {
+    console.warn(`[mapper] ⚠️ RUT DV inválido: "${dv}". Original: "${rut}"`);
+    return undefined;
+  }
+
+  // 5. Formatear body con puntos de miles
   const formatted = body.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `${formatted}-${dv}`;
+  const result = `${formatted}-${dv}`;
+
+  // 6. Validar contra regex objetivo de HubSpot
+  if (!HUBSPOT_RUT_REGEX.test(result)) {
+    console.warn(`[mapper] ⚠️ RUT "${result}" no cumple regex HubSpot. Original: "${rut}"`);
+    return undefined;
+  }
+
+  return result;
 }
 
 /**
