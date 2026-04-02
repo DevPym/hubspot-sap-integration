@@ -69,8 +69,10 @@ export interface SapBusinessPartner {
   /** Solo para Category='2' — razón social (hasta 40 caracteres) */
   OrganizationBPName3?: string;
   CorrespondenceLanguage: string; // 'ES'
-  /** Término de búsqueda corto (hasta 20 caracteres) */
+  /** Término de búsqueda corto (hasta 20 caracteres) — name (org) / lastname (persona) */
   SearchTerm1?: string;
+  /** Segundo término de búsqueda — RUT (org) / jobtitle (persona) */
+  SearchTerm2?: string;
   /** Código de industria SAP */
   Industry?: string;
   /** Ocupación del BP persona — mapeo desde jobtitle HubSpot */
@@ -346,6 +348,36 @@ export interface SapSalesOrder {
    */
   LastChangeDateTime?: string;
   to_Item?: { results: SapSalesOrderItem[] };
+  to_Text?: { results: SapSalesOrderText[] };
+  to_Partner?: { results: SapSalesOrderPartner[] };
+}
+
+// ---------------------------------------------------------------------------
+// Sales Order Text — sub-entidad to_Text
+// ---------------------------------------------------------------------------
+
+/** Texto del header de SalesOrder (nota, descripción del deal) */
+export interface SapSalesOrderText {
+  SalesOrder?: string;
+  Language: string;       // 'ES'
+  LongTextID: string;     // '0001' = header text
+  LongText: string;
+}
+
+// ---------------------------------------------------------------------------
+// Sales Order Partner — sub-entidad to_Partner
+// ---------------------------------------------------------------------------
+
+/**
+ * Partner del header de SalesOrder.
+ * PartnerFunction='AP' → Contact Person (mapea al Contact del Deal).
+ * ContactPerson = BP ID del Contact vía id_map.
+ */
+export interface SapSalesOrderPartner {
+  SalesOrder?: string;
+  PartnerFunction: string;  // 'AP' = Contact Person
+  Customer?: string;
+  ContactPerson?: string;   // BP ID del contacto
 }
 
 /**
@@ -361,6 +393,8 @@ export type SapCreateSalesOrderPayload = Omit<
   | 'LastChangeDateTime'
 > & {
   to_Item?: { results: Omit<SapSalesOrderItem, 'SalesOrder'>[] };
+  to_Text?: { results: Omit<SapSalesOrderText, 'SalesOrder'>[] };
+  to_Partner?: { results: Omit<SapSalesOrderPartner, 'SalesOrder'>[] };
 };
 
 /**

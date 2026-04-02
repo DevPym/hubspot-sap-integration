@@ -1,0 +1,1340 @@
+{
+  "info": {
+    "_postman_id": "qs-integration-tests-001",
+    "name": "Química Sur — HubSpot ↔ SAP Integration Tests",
+    "description": "Suite de pruebas E2E para validar creación, actualización y vinculación de objetos entre HubSpot CRM y SAP S/4HANA Cloud.\n\n**Orden de ejecución:**\n1. [HS] Create Company\n2. [HS] Create Contact\n3. [HS] Create Deal + Associations\n4. [HS] Associate Contact → Company\n5. [HS] Verify Company\n6. [HS] Verify Contact\n7. [HS] Verify Deal + Associations\n8. [SAP] Fetch CSRF Token\n9. [SAP] Create BP Org (Company)\n10. [SAP] Get BP Org → Customer Number\n11. [SAP] Create BP Persona (Contact)\n12. [SAP] Get BP Persona → Address + Customer\n13. [SAP] Create Email on BP Persona\n14. [SAP] Create Phone on BP Persona\n15. [SAP] Create SalesOrder (Deal)\n16. [SAP] Verify BP Org\n17. [SAP] Verify BP Persona\n18. [SAP] Verify SalesOrder\n19. [HS] Update Company\n20. [HS] Update Contact\n21. [HS] Update Deal\n22. [SAP] Refresh CSRF Token\n23. [SAP] Get BP Org ETag\n24. [SAP] Update BP Org\n25. [SAP] Get BP Persona ETag\n26. [SAP] Update BP Persona\n27. [SAP] Get SalesOrder ETag\n28. [SAP] Update SalesOrder\n\n**Variables automáticas:**\nLos IDs se extraen automáticamente entre requests via Test Scripts.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 · [HS] Create Company",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const res = pm.response.json();",
+              "",
+              "pm.test('Status 201 Created', () => {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Company ID returned', () => {",
+              "    pm.expect(res.id).to.be.a('string');",
+              "    pm.environment.set('hs_companyId', res.id);",
+              "    console.log('✅ hs_companyId =', res.id);",
+              "});",
+              "",
+              "pm.test('Properties saved correctly', () => {",
+              "    pm.expect(res.properties.name).to.eql('IntTest Corp SAP 2026');",
+              "    pm.expect(res.properties.domain).to.eql('inttest-sap-2026.cl');",
+              "    pm.expect(res.properties.phone).to.eql('226001234');",
+              "});",
+              "",
+              "pm.environment.set('TEST_TIMESTAMP', new Date().toISOString());"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Clean slate for test run",
+              "pm.environment.set('TEST_TIMESTAMP', new Date().toISOString());"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{HS_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"properties\": {\n    \"name\": \"IntTest Corp SAP 2026\",\n    \"domain\": \"inttest-sap-2026.cl\",\n    \"phone\": \"226001234\",\n    \"address\": \"Av. Providencia 1234\",\n    \"address2\": \"Oficina 501\",\n    \"city\": \"Santiago\",\n    \"state\": \"Región Metropolitana\",\n    \"zip\": \"7500000\",\n    \"country\": \"Chile\",\n    \"industry\": \"CHEMICALS\",\n    \"description\": \"Empresa de prueba para integración HubSpot-SAP\",\n    \"numberofemployees\": \"150\",\n    \"annualrevenue\": \"5000000\",\n    \"website\": \"https://inttest-sap-2026.cl\",\n    \"lifecyclestage\": \"customer\",\n    \"type\": \"PARTNER\",\n    \"razon_social\": \"IntTest Corp SAP SpA\",\n    \"rut\": \"76.123.456-7\",\n    \"giro\": \"Fabricación de productos químicos\",\n    \"comuna\": \"Providencia\",\n    \"pais\": \"Chile\",\n    \"condicion_venta\": \"NT30\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{HS_BASE_URL}}/crm/v3/objects/companies",
+          "host": ["{{HS_BASE_URL}}"],
+          "path": ["crm", "v3", "objects", "companies"]
+        }
+      }
+    },
+    {
+      "name": "02 · [HS] Create Contact",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const res = pm.response.json();",
+              "",
+              "pm.test('Status 201 Created', () => {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Contact ID returned', () => {",
+              "    pm.expect(res.id).to.be.a('string');",
+              "    pm.environment.set('hs_contactId', res.id);",
+              "    console.log('✅ hs_contactId =', res.id);",
+              "});",
+              "",
+              "pm.test('Properties saved correctly', () => {",
+              "    pm.expect(res.properties.firstname).to.eql('María');",
+              "    pm.expect(res.properties.lastname).to.eql('Testínez');",
+              "    pm.expect(res.properties.email).to.eql('maria.testinez@inttest-sap-2026.cl');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{HS_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"properties\": {\n    \"firstname\": \"María\",\n    \"lastname\": \"Testínez\",\n    \"email\": \"maria.testinez@inttest-sap-2026.cl\",\n    \"phone\": \"226005678\",\n    \"mobilephone\": \"569912345678\",\n    \"jobtitle\": \"Gerenta Comercial\",\n    \"address\": \"Av. Providencia 1234\",\n    \"city\": \"Santiago\",\n    \"state\": \"Región Metropolitana\",\n    \"zip\": \"7500000\",\n    \"country\": \"Chile\",\n    \"company\": \"IntTest Corp SAP 2026\",\n    \"lifecyclestage\": \"customer\",\n    \"salutation\": \"Sra.\",\n    \"website\": \"https://inttest-sap-2026.cl\",\n    \"sucursal\": \"Santiago\",\n    \"comuna\": \"Providencia\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{HS_BASE_URL}}/crm/v3/objects/contacts",
+          "host": ["{{HS_BASE_URL}}"],
+          "path": ["crm", "v3", "objects", "contacts"]
+        }
+      }
+    },
+    {
+      "name": "03 · [HS] Create Deal + Associations",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const res = pm.response.json();",
+              "",
+              "pm.test('Status 201 Created', () => {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Deal ID returned', () => {",
+              "    pm.expect(res.id).to.be.a('string');",
+              "    pm.environment.set('hs_dealId', res.id);",
+              "    console.log('✅ hs_dealId =', res.id);",
+              "});",
+              "",
+              "pm.test('Properties saved correctly', () => {",
+              "    pm.expect(res.properties.dealname).to.eql('Deal IntTest SAP 2026');",
+              "    pm.expect(res.properties.pipeline).to.eql(pm.environment.get('PIPELINE_VENTAS'));",
+              "    pm.expect(res.properties.amount).to.eql('2500000');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{HS_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"properties\": {\n    \"dealname\": \"Deal IntTest SAP 2026\",\n    \"amount\": \"2500000\",\n    \"dealstage\": \"{{STAGE_ENVIAR_COTIZACION}}\",\n    \"pipeline\": \"{{PIPELINE_VENTAS}}\",\n    \"closedate\": \"2026-06-30T00:00:00.000Z\",\n    \"dealtype\": \"newbusiness\",\n    \"description\": \"Deal de prueba para integración HubSpot-SAP — Orden de venta química industrial\",\n    \"hs_priority\": \"high\",\n    \"condicion_de_pago\": \"NT30\",\n    \"orden_de_compra_o_contratoo\": \"OC-TEST-2026-001\"\n  },\n  \"associations\": [\n    {\n      \"to\": { \"id\": \"{{hs_contactId}}\" },\n      \"types\": [\n        {\n          \"associationCategory\": \"HUBSPOT_DEFINED\",\n          \"associationTypeId\": 3\n        }\n      ]\n    },\n    {\n      \"to\": { \"id\": \"{{hs_companyId}}\" },\n      \"types\": [\n        {\n          \"associationCategory\": \"HUBSPOT_DEFINED\",\n          \"associationTypeId\": 5\n        }\n      ]\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{HS_BASE_URL}}/crm/v3/objects/deals",
+          "host": ["{{HS_BASE_URL}}"],
+          "path": ["crm", "v3", "objects", "deals"]
+        }
+      }
+    },
+    {
+      "name": "04 · [HS] Associate Contact → Company (Primary)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', () => {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Association created', () => {",
+              "    const res = pm.response.json();",
+              "    pm.expect(res.status).to.eql('COMPLETE');",
+              "    console.log('✅ Contact → Company association (Primary) created');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{HS_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "[\n  {\n    \"associationCategory\": \"HUBSPOT_DEFINED\",\n    \"associationTypeId\": 1\n  }\n]"
+        },
+        "url": {
+          "raw": "{{HS_BASE_URL}}/crm/v4/objects/contact/{{hs_contactId}}/associations/company/{{hs_companyId}}",
+          "host": ["{{HS_BASE_URL}}"],
+          "path": ["crm", "v4", "objects", "contact", "{{hs_contactId}}", "associations", "company", "{{hs_companyId}}"]
+        }
+      }
+    },
+    {
+      "name": "05 · [HS] Verify Company",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const res = pm.response.json();",
+              "",
+              "pm.test('Status 200 OK', () => {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Company properties match', () => {",
+              "    const p = res.properties;",
+              "    pm.expect(p.name).to.eql('IntTest Corp SAP 2026');",
+              "    pm.expect(p.city).to.eql('Santiago');",
+              "    pm.expect(p.zip).to.eql('7500000');",
+              "    pm.expect(p.country).to.eql('Chile');",
+              "    pm.expect(p.phone).to.eql('226001234');",
+              "    console.log('✅ Company verified — hs_lastmodifieddate:', p.hs_lastmodifieddate);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{HS_TOKEN}}" }
+        ],
+        "url": {
+          "raw": "{{HS_BASE_URL}}/crm/v3/objects/companies/{{hs_companyId}}?properties=name,domain,phone,address,address2,city,state,zip,country,industry,description,numberofemployees,annualrevenue,website,lifecyclestage,type,razon_social,rut,giro,comuna,pais,condicion_venta,hs_lastmodifieddate",
+          "host": ["{{HS_BASE_URL}}"],
+          "path": ["crm", "v3", "objects", "companies", "{{hs_companyId}}"],
+          "query": [
+            {
+              "key": "properties",
+              "value": "name,domain,phone,address,address2,city,state,zip,country,industry,description,numberofemployees,annualrevenue,website,lifecyclestage,type,razon_social,rut,giro,comuna,pais,condicion_venta,hs_lastmodifieddate"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "06 · [HS] Verify Contact",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const res = pm.response.json();",
+              "",
+              "pm.test('Status 200 OK', () => {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Contact properties match', () => {",
+              "    const p = res.properties;",
+              "    pm.expect(p.firstname).to.eql('María');",
+              "    pm.expect(p.lastname).to.eql('Testínez');",
+              "    pm.expect(p.email).to.eql('maria.testinez@inttest-sap-2026.cl');",
+              "    pm.expect(p.phone).to.eql('226005678');",
+              "    pm.expect(p.mobilephone).to.eql('569912345678');",
+              "    console.log('✅ Contact verified — lastmodifieddate:', p.lastmodifieddate);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{HS_TOKEN}}" }
+        ],
+        "url": {
+          "raw": "{{HS_BASE_URL}}/crm/v3/objects/contacts/{{hs_contactId}}?properties=firstname,lastname,email,phone,mobilephone,jobtitle,address,city,state,zip,country,company,lifecyclestage,salutation,website,sucursal,comuna,lastmodifieddate",
+          "host": ["{{HS_BASE_URL}}"],
+          "path": ["crm", "v3", "objects", "contacts", "{{hs_contactId}}"],
+          "query": [
+            {
+              "key": "properties",
+              "value": "firstname,lastname,email,phone,mobilephone,jobtitle,address,city,state,zip,country,company,lifecyclestage,salutation,website,sucursal,comuna,lastmodifieddate"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "07 · [HS] Verify Deal + Associations",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const res = pm.response.json();",
+              "",
+              "pm.test('Status 200 OK', () => {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Deal properties match', () => {",
+              "    const p = res.properties;",
+              "    pm.expect(p.dealname).to.eql('Deal IntTest SAP 2026');",
+              "    pm.expect(p.amount).to.eql('2500000');",
+              "    pm.expect(p.pipeline).to.eql(pm.environment.get('PIPELINE_VENTAS'));",
+              "});",
+              "",
+              "pm.test('Deal has contact association', () => {",
+              "    const contacts = res.associations?.contacts?.results;",
+              "    pm.expect(contacts).to.be.an('array').that.is.not.empty;",
+              "    const ids = contacts.map(c => c.id);",
+              "    pm.expect(ids).to.include(pm.environment.get('hs_contactId'));",
+              "    console.log('✅ Deal → Contact association verified');",
+              "});",
+              "",
+              "pm.test('Deal has company association', () => {",
+              "    const companies = res.associations?.companies?.results;",
+              "    pm.expect(companies).to.be.an('array').that.is.not.empty;",
+              "    const ids = companies.map(c => c.id);",
+              "    pm.expect(ids).to.include(pm.environment.get('hs_companyId'));",
+              "    console.log('✅ Deal → Company association verified');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{HS_TOKEN}}" }
+        ],
+        "url": {
+          "raw": "{{HS_BASE_URL}}/crm/v3/objects/deals/{{hs_dealId}}?properties=dealname,amount,dealstage,pipeline,closedate,dealtype,description,hs_priority,condicion_de_pago,orden_de_compra_o_contratoo,hs_lastmodifieddate&associations=contacts,companies",
+          "host": ["{{HS_BASE_URL}}"],
+          "path": ["crm", "v3", "objects", "deals", "{{hs_dealId}}"],
+          "query": [
+            {
+              "key": "properties",
+              "value": "dealname,amount,dealstage,pipeline,closedate,dealtype,description,hs_priority,condicion_de_pago,orden_de_compra_o_contratoo,hs_lastmodifieddate"
+            },
+            {
+              "key": "associations",
+              "value": "contacts,companies"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "08 · [SAP] Fetch CSRF Token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', () => {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('CSRF Token received', () => {",
+              "    const csrf = pm.response.headers.get('x-csrf-token');",
+              "    pm.expect(csrf).to.be.a('string').and.not.eql('Required');",
+              "    pm.environment.set('SAP_CSRF_TOKEN', csrf);",
+              "    console.log('✅ CSRF Token:', csrf.substring(0, 10) + '...');",
+              "});",
+              "",
+              "// Store cookies for session continuity",
+              "const cookies = pm.response.headers.filter(h => h.key.toLowerCase() === 'set-cookie').map(h => h.value.split(';')[0]).join('; ');",
+              "if (cookies) {",
+              "    pm.environment.set('SAP_COOKIES', cookies);",
+              "    console.log('✅ Session cookies stored');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          { "key": "x-csrf-token", "value": "fetch" },
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_BUSINESS_PARTNER/A_BusinessPartner?$top=1",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_BUSINESS_PARTNER", "A_BusinessPartner"],
+          "query": [
+            { "key": "$top", "value": "1" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "09 · [SAP] Create BP Org (← HubSpot Company)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201 Created', () => {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "const res = pm.response.json();",
+              "const bp = res.d;",
+              "",
+              "pm.test('BP Org ID returned', () => {",
+              "    pm.expect(bp.BusinessPartner).to.be.a('string');",
+              "    pm.environment.set('sap_bp_org_id', bp.BusinessPartner);",
+              "    console.log('✅ sap_bp_org_id =', bp.BusinessPartner);",
+              "});",
+              "",
+              "pm.test('Category = 2 (Organization)', () => {",
+              "    pm.expect(bp.BusinessPartnerCategory).to.eql('2');",
+              "});",
+              "",
+              "pm.test('Organization name matches', () => {",
+              "    pm.expect(bp.OrganizationBPName1).to.eql('IntTest Corp SAP 2026');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          { "key": "x-csrf-token", "value": "{{SAP_CSRF_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Cookie", "value": "{{SAP_COOKIES}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"BusinessPartnerCategory\": \"2\",\n    \"BusinessPartnerGrouping\": \"BP02\",\n    \"OrganizationBPName1\": \"IntTest Corp SAP 2026\",\n    \"SearchTerm1\": \"INTTEST\",\n    \"CorrespondenceLanguage\": \"ES\",\n    \"to_BusinessPartnerAddress\": [\n        {\n            \"StreetName\": \"Av. Providencia 1234\",\n            \"CityName\": \"Santiago\",\n            \"Country\": \"CL\",\n            \"Language\": \"ES\",\n            \"PostalCode\": \"7500000\",\n            \"Region\": \"RM\"\n        }\n    ],\n    \"to_BusinessPartnerTax\": {\n        \"results\": [\n            {\n                \"BPTaxType\": \"CO3\",\n                \"BPTaxNumber\": \"761234567\"\n            }\n        ]\n    },\n    \"to_BusinessPartnerRole\": {\n        \"results\": [\n            {\n                \"BusinessPartnerRole\": \"FLCU00\",\n                \"ValidFrom\": \"2025-01-01T00:00:00Z\",\n                \"ValidTo\": \"9999-12-31T23:59:59Z\"\n            },\n            {\n                \"BusinessPartnerRole\": \"FLCU01\",\n                \"ValidFrom\": \"2025-01-01T00:00:00Z\",\n                \"ValidTo\": \"9999-12-31T23:59:59Z\"\n            }\n        ]\n    },\n    \"to_Customer\": {\n        \"to_CustomerCompany\": {\n            \"results\": [\n                {\n                    \"CompanyCode\": \"4610\",\n                    \"PaymentTerms\": \"NT30\",\n                    \"ReconciliationAccount\": \"12120100\"\n                }\n            ]\n        }\n    }\n}"
+        },
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_BUSINESS_PARTNER/A_BusinessPartner",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_BUSINESS_PARTNER", "A_BusinessPartner"]
+        }
+      }
+    },
+    {
+      "name": "10 · [SAP] Get BP Org → Customer Number",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', () => {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const res = pm.response.json();",
+              "const bp = res.d;",
+              "",
+              "pm.test('Customer data returned', () => {",
+              "    const customer = bp.to_Customer;",
+              "    pm.expect(customer).to.not.be.null;",
+              "    pm.expect(customer.Customer).to.be.a('string');",
+              "    pm.environment.set('sap_bp_org_customer', customer.Customer);",
+              "    console.log('✅ sap_bp_org_customer =', customer.Customer);",
+              "});",
+              "",
+              "// Store ETag for future PATCH",
+              "const etag = pm.response.headers.get('etag');",
+              "if (etag) {",
+              "    pm.environment.set('sap_bp_org_etag', etag);",
+              "    console.log('✅ ETag stored:', etag.substring(0, 30) + '...');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_BUSINESS_PARTNER/A_BusinessPartner('{{sap_bp_org_id}}')?$expand=to_Customer,to_BusinessPartnerAddress",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_BUSINESS_PARTNER", "A_BusinessPartner('{{sap_bp_org_id}}')"],
+          "query": [
+            { "key": "$expand", "value": "to_Customer,to_BusinessPartnerAddress" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "11 · [SAP] Create BP Persona (← HubSpot Contact)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201 Created', () => {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "const res = pm.response.json();",
+              "const bp = res.d;",
+              "",
+              "pm.test('BP Persona ID returned', () => {",
+              "    pm.expect(bp.BusinessPartner).to.be.a('string');",
+              "    pm.environment.set('sap_bp_persona_id', bp.BusinessPartner);",
+              "    console.log('✅ sap_bp_persona_id =', bp.BusinessPartner);",
+              "});",
+              "",
+              "pm.test('Category = 1 (Person)', () => {",
+              "    pm.expect(bp.BusinessPartnerCategory).to.eql('1');",
+              "});",
+              "",
+              "pm.test('Name matches', () => {",
+              "    pm.expect(bp.FirstName).to.eql('María');",
+              "    pm.expect(bp.LastName).to.eql('Testínez');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          { "key": "x-csrf-token", "value": "{{SAP_CSRF_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Cookie", "value": "{{SAP_COOKIES}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"BusinessPartnerCategory\": \"1\",\n    \"BusinessPartnerGrouping\": \"BP02\",\n    \"FirstName\": \"María\",\n    \"LastName\": \"Testínez\",\n    \"CorrespondenceLanguage\": \"ES\",\n    \"SearchTerm1\": \"TESTINEZ\",\n    \"to_BusinessPartnerAddress\": [\n        {\n            \"StreetName\": \"Av. Providencia 1234\",\n            \"CityName\": \"Santiago\",\n            \"Country\": \"CL\",\n            \"Language\": \"ES\",\n            \"PostalCode\": \"7500000\",\n            \"Region\": \"RM\"\n        }\n    ],\n    \"to_BusinessPartnerTax\": {\n        \"results\": [\n            {\n                \"BPTaxType\": \"CO3\",\n                \"BPTaxNumber\": \"12345678\"\n            }\n        ]\n    },\n    \"to_BusinessPartnerRole\": {\n        \"results\": [\n            {\n                \"BusinessPartnerRole\": \"FLCU00\",\n                \"ValidFrom\": \"2025-01-01T00:00:00Z\",\n                \"ValidTo\": \"9999-12-31T23:59:59Z\"\n            },\n            {\n                \"BusinessPartnerRole\": \"FLCU01\",\n                \"ValidFrom\": \"2025-01-01T00:00:00Z\",\n                \"ValidTo\": \"9999-12-31T23:59:59Z\"\n            }\n        ]\n    },\n    \"to_Customer\": {\n        \"to_CustomerCompany\": {\n            \"results\": [\n                {\n                    \"CompanyCode\": \"4610\",\n                    \"PaymentTerms\": \"NT30\",\n                    \"ReconciliationAccount\": \"12120100\"\n                }\n            ]\n        }\n    }\n}"
+        },
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_BUSINESS_PARTNER/A_BusinessPartner",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_BUSINESS_PARTNER", "A_BusinessPartner"]
+        }
+      }
+    },
+    {
+      "name": "12 · [SAP] Get BP Persona → Address + Customer",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', () => {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const res = pm.response.json();",
+              "const bp = res.d;",
+              "",
+              "pm.test('Address returned', () => {",
+              "    const addrs = bp.to_BusinessPartnerAddress?.results;",
+              "    pm.expect(addrs).to.be.an('array').that.is.not.empty;",
+              "    pm.environment.set('sap_bp_persona_address_id', addrs[0].AddressID);",
+              "    console.log('✅ AddressID =', addrs[0].AddressID);",
+              "});",
+              "",
+              "pm.test('Customer data returned', () => {",
+              "    const customer = bp.to_Customer;",
+              "    pm.expect(customer).to.not.be.null;",
+              "    pm.environment.set('sap_bp_persona_customer', customer.Customer);",
+              "    console.log('✅ sap_bp_persona_customer =', customer.Customer);",
+              "});",
+              "",
+              "const etag = pm.response.headers.get('etag');",
+              "if (etag) {",
+              "    pm.environment.set('sap_bp_persona_etag', etag);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_BUSINESS_PARTNER/A_BusinessPartner('{{sap_bp_persona_id}}')?$expand=to_Customer,to_BusinessPartnerAddress",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_BUSINESS_PARTNER", "A_BusinessPartner('{{sap_bp_persona_id}}')"],
+          "query": [
+            { "key": "$expand", "value": "to_Customer,to_BusinessPartnerAddress" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "13 · [SAP] Create Email on BP Persona",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201 Created', () => {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "const res = pm.response.json();",
+              "pm.test('Email address saved', () => {",
+              "    pm.expect(res.d.EmailAddress).to.eql('maria.testinez@inttest-sap-2026.cl');",
+              "    console.log('✅ Email created on BP Persona');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          { "key": "x-csrf-token", "value": "{{SAP_CSRF_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Cookie", "value": "{{SAP_COOKIES}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"EmailAddress\": \"maria.testinez@inttest-sap-2026.cl\",\n    \"IsDefaultEmailAddress\": true\n}"
+        },
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_BUSINESS_PARTNER/A_BusinessPartnerAddress(BusinessPartner='{{sap_bp_persona_id}}',AddressID='{{sap_bp_persona_address_id}}')/to_EmailAddress",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_BUSINESS_PARTNER", "A_BusinessPartnerAddress(BusinessPartner='{{sap_bp_persona_id}}',AddressID='{{sap_bp_persona_address_id}}')", "to_EmailAddress"]
+        }
+      }
+    },
+    {
+      "name": "14 · [SAP] Create Phone on BP Persona",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201 Created', () => {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "const res = pm.response.json();",
+              "pm.test('Phone number saved', () => {",
+              "    pm.expect(res.d.PhoneNumber).to.eql('226005678');",
+              "    console.log('✅ Phone created on BP Persona — PhoneNumberType:', res.d.PhoneNumberType);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          { "key": "x-csrf-token", "value": "{{SAP_CSRF_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Cookie", "value": "{{SAP_COOKIES}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"PhoneNumber\": \"226005678\",\n    \"IsDefaultPhoneNumber\": true,\n    \"DestinationLocationCountry\": \"CL\"\n}"
+        },
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_BUSINESS_PARTNER/A_BusinessPartnerAddress(BusinessPartner='{{sap_bp_persona_id}}',AddressID='{{sap_bp_persona_address_id}}')/to_PhoneNumber",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_BUSINESS_PARTNER", "A_BusinessPartnerAddress(BusinessPartner='{{sap_bp_persona_id}}',AddressID='{{sap_bp_persona_address_id}}')", "to_PhoneNumber"]
+        }
+      }
+    },
+    {
+      "name": "15 · [SAP] Create SalesOrder (← HubSpot Deal)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201 Created', () => {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "const res = pm.response.json();",
+              "const so = res.d;",
+              "",
+              "pm.test('SalesOrder ID returned', () => {",
+              "    pm.expect(so.SalesOrder).to.be.a('string');",
+              "    pm.environment.set('sap_salesorder_id', so.SalesOrder);",
+              "    console.log('✅ sap_salesorder_id =', so.SalesOrder);",
+              "});",
+              "",
+              "pm.test('SalesOrderType = OR', () => {",
+              "    pm.expect(so.SalesOrderType).to.eql('OR');",
+              "});",
+              "",
+              "pm.test('SoldToParty matches BP Org customer', () => {",
+              "    pm.expect(so.SoldToParty).to.eql(pm.environment.get('sap_bp_org_customer'));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          { "key": "x-csrf-token", "value": "{{SAP_CSRF_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Cookie", "value": "{{SAP_COOKIES}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"SalesOrderType\": \"OR\",\n    \"SalesOrganization\": \"4601\",\n    \"DistributionChannel\": \"CF\",\n    \"OrganizationDivision\": \"10\",\n    \"SoldToParty\": \"{{sap_bp_org_customer}}\",\n    \"PurchaseOrderByCustomer\": \"OC-TEST-2026-001\",\n    \"SalesOrderDate\": \"/Date(1743552000000)/\",\n    \"RequestedDeliveryDate\": \"/Date(1751328000000)/\",\n    \"TransactionCurrency\": \"CLP\",\n    \"CustomerPaymentTerms\": \"NT30\",\n    \"to_Item\": {\n        \"results\": [\n            {\n                \"Material\": \"Q01\",\n                \"RequestedQuantity\": \"100\",\n                \"RequestedQuantityUnit\": \"L\",\n                \"SalesOrderItemText\": \"Deal IntTest SAP 2026 — Producto químico industrial\"\n            }\n        ]\n    }\n}"
+        },
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_SALES_ORDER_SRV/A_SalesOrder",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_SALES_ORDER_SRV", "A_SalesOrder"]
+        }
+      }
+    },
+    {
+      "name": "16 · [SAP] Verify BP Org (all fields)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', () => { pm.response.to.have.status(200); });",
+              "",
+              "const bp = pm.response.json().d;",
+              "pm.test('BP Org data matches HubSpot Company', () => {",
+              "    pm.expect(bp.OrganizationBPName1).to.eql('IntTest Corp SAP 2026');",
+              "    pm.expect(bp.BusinessPartnerCategory).to.eql('2');",
+              "    pm.expect(bp.CorrespondenceLanguage).to.eql('ES');",
+              "    console.log('✅ BP Org verified — LastChangeDateTime:', bp.LastChangeDateTime);",
+              "});",
+              "",
+              "pm.test('Address matches', () => {",
+              "    const addr = bp.to_BusinessPartnerAddress?.results?.[0];",
+              "    pm.expect(addr).to.not.be.undefined;",
+              "    pm.expect(addr.CityName).to.eql('Santiago');",
+              "    pm.expect(addr.Country).to.eql('CL');",
+              "    pm.expect(addr.PostalCode).to.eql('7500000');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_BUSINESS_PARTNER/A_BusinessPartner('{{sap_bp_org_id}}')?$expand=to_BusinessPartnerAddress,to_BusinessPartnerRole,to_BusinessPartnerTax,to_Customer",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_BUSINESS_PARTNER", "A_BusinessPartner('{{sap_bp_org_id}}')"],
+          "query": [
+            { "key": "$expand", "value": "to_BusinessPartnerAddress,to_BusinessPartnerRole,to_BusinessPartnerTax,to_Customer" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "17 · [SAP] Verify BP Persona (all fields)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', () => { pm.response.to.have.status(200); });",
+              "",
+              "const bp = pm.response.json().d;",
+              "pm.test('BP Persona data matches HubSpot Contact', () => {",
+              "    pm.expect(bp.FirstName).to.eql('María');",
+              "    pm.expect(bp.LastName).to.eql('Testínez');",
+              "    pm.expect(bp.BusinessPartnerCategory).to.eql('1');",
+              "    console.log('✅ BP Persona verified');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_BUSINESS_PARTNER/A_BusinessPartner('{{sap_bp_persona_id}}')?$expand=to_BusinessPartnerAddress,to_BusinessPartnerRole,to_Customer",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_BUSINESS_PARTNER", "A_BusinessPartner('{{sap_bp_persona_id}}')"],
+          "query": [
+            { "key": "$expand", "value": "to_BusinessPartnerAddress,to_BusinessPartnerRole,to_Customer" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "18 · [SAP] Verify SalesOrder (all fields)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', () => { pm.response.to.have.status(200); });",
+              "",
+              "const so = pm.response.json().d;",
+              "pm.test('SalesOrder data matches HubSpot Deal', () => {",
+              "    pm.expect(so.SalesOrderType).to.eql('OR');",
+              "    pm.expect(so.SalesOrganization).to.eql('4601');",
+              "    pm.expect(so.DistributionChannel).to.eql('CF');",
+              "    pm.expect(so.OrganizationDivision).to.eql('10');",
+              "    pm.expect(so.PurchaseOrderByCustomer).to.eql('OC-TEST-2026-001');",
+              "    console.log('✅ SalesOrder verified — SoldToParty:', so.SoldToParty);",
+              "});",
+              "",
+              "pm.test('Has at least 1 item', () => {",
+              "    const items = so.to_Item?.results;",
+              "    pm.expect(items).to.be.an('array').that.is.not.empty;",
+              "    pm.expect(items[0].Material).to.eql('Q01');",
+              "    console.log('✅ Item verified — Material:', items[0].Material, 'Qty:', items[0].RequestedQuantity);",
+              "});",
+              "",
+              "const etag = pm.response.headers.get('etag');",
+              "if (etag) {",
+              "    pm.environment.set('sap_salesorder_etag', etag);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_SALES_ORDER_SRV/A_SalesOrder('{{sap_salesorder_id}}')?$expand=to_Item,to_Partner",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_SALES_ORDER_SRV", "A_SalesOrder('{{sap_salesorder_id}}')"],
+          "query": [
+            { "key": "$expand", "value": "to_Item,to_Partner" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "19 · [HS] Update Company",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', () => { pm.response.to.have.status(200); });",
+              "",
+              "const p = pm.response.json().properties;",
+              "pm.test('Company updated', () => {",
+              "    pm.expect(p.phone).to.eql('226009999');",
+              "    pm.expect(p.description).to.include('ACTUALIZADO');",
+              "    console.log('✅ Company updated — new hs_lastmodifieddate:', p.hs_lastmodifieddate);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{HS_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"properties\": {\n    \"phone\": \"226009999\",\n    \"address\": \"Av. Apoquindo 5678\",\n    \"city\": \"Las Condes\",\n    \"zip\": \"7550000\",\n    \"description\": \"ACTUALIZADO — Empresa de prueba HubSpot-SAP — nueva dirección\",\n    \"numberofemployees\": \"200\",\n    \"comuna\": \"Las Condes\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{HS_BASE_URL}}/crm/v3/objects/companies/{{hs_companyId}}",
+          "host": ["{{HS_BASE_URL}}"],
+          "path": ["crm", "v3", "objects", "companies", "{{hs_companyId}}"]
+        }
+      }
+    },
+    {
+      "name": "20 · [HS] Update Contact",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', () => { pm.response.to.have.status(200); });",
+              "",
+              "const p = pm.response.json().properties;",
+              "pm.test('Contact updated', () => {",
+              "    pm.expect(p.phone).to.eql('226008888');",
+              "    pm.expect(p.jobtitle).to.eql('Directora Comercial');",
+              "    console.log('✅ Contact updated — new lastmodifieddate:', p.lastmodifieddate);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{HS_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"properties\": {\n    \"phone\": \"226008888\",\n    \"mobilephone\": \"569987654321\",\n    \"jobtitle\": \"Directora Comercial\",\n    \"address\": \"Av. Apoquindo 5678\",\n    \"city\": \"Las Condes\",\n    \"zip\": \"7550000\",\n    \"comuna\": \"Las Condes\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{HS_BASE_URL}}/crm/v3/objects/contacts/{{hs_contactId}}",
+          "host": ["{{HS_BASE_URL}}"],
+          "path": ["crm", "v3", "objects", "contacts", "{{hs_contactId}}"]
+        }
+      }
+    },
+    {
+      "name": "21 · [HS] Update Deal (stage → Negociación)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', () => { pm.response.to.have.status(200); });",
+              "",
+              "const p = pm.response.json().properties;",
+              "pm.test('Deal updated', () => {",
+              "    pm.expect(p.dealstage).to.eql(pm.environment.get('STAGE_NEGOCIACION'));",
+              "    pm.expect(p.amount).to.eql('3000000');",
+              "    console.log('✅ Deal updated — stage: Negociación, amount: 3000000');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{HS_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"properties\": {\n    \"dealstage\": \"{{STAGE_NEGOCIACION}}\",\n    \"amount\": \"3000000\",\n    \"description\": \"ACTUALIZADO — Monto incrementado tras negociación exitosa\",\n    \"orden_de_compra_o_contratoo\": \"OC-TEST-2026-002\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{HS_BASE_URL}}/crm/v3/objects/deals/{{hs_dealId}}",
+          "host": ["{{HS_BASE_URL}}"],
+          "path": ["crm", "v3", "objects", "deals", "{{hs_dealId}}"]
+        }
+      }
+    },
+    {
+      "name": "22 · [SAP] Refresh CSRF Token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('CSRF refreshed', () => {",
+              "    const csrf = pm.response.headers.get('x-csrf-token');",
+              "    pm.expect(csrf).to.be.a('string');",
+              "    pm.environment.set('SAP_CSRF_TOKEN', csrf);",
+              "    console.log('✅ CSRF Token refreshed');",
+              "});",
+              "",
+              "const cookies = pm.response.headers.filter(h => h.key.toLowerCase() === 'set-cookie').map(h => h.value.split(';')[0]).join('; ');",
+              "if (cookies) pm.environment.set('SAP_COOKIES', cookies);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          { "key": "x-csrf-token", "value": "fetch" },
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_BUSINESS_PARTNER/A_BusinessPartner?$top=1",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_BUSINESS_PARTNER", "A_BusinessPartner"],
+          "query": [
+            { "key": "$top", "value": "1" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "23 · [SAP] Get BP Org ETag",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => { pm.response.to.have.status(200); });",
+              "const etag = pm.response.headers.get('etag');",
+              "pm.test('ETag received', () => {",
+              "    pm.expect(etag).to.be.a('string');",
+              "    pm.environment.set('sap_bp_org_etag', etag);",
+              "    console.log('✅ BP Org ETag:', etag);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_BUSINESS_PARTNER/A_BusinessPartner('{{sap_bp_org_id}}')",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_BUSINESS_PARTNER", "A_BusinessPartner('{{sap_bp_org_id}}')"]
+        }
+      }
+    },
+    {
+      "name": "24 · [SAP] Update BP Org (← HS Company updated)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 204 No Content', () => {",
+              "    pm.response.to.have.status(204);",
+              "    console.log('✅ BP Org PATCH successful (204)');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "PATCH",
+        "header": [
+          { "key": "x-csrf-token", "value": "{{SAP_CSRF_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Accept", "value": "application/json" },
+          { "key": "If-Match", "value": "{{sap_bp_org_etag}}" },
+          { "key": "Cookie", "value": "{{SAP_COOKIES}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"SearchTerm1\": \"INTTEST-UPD\",\n    \"OrganizationBPName1\": \"IntTest Corp SAP 2026 — Actualizado\"\n}"
+        },
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_BUSINESS_PARTNER/A_BusinessPartner('{{sap_bp_org_id}}')",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_BUSINESS_PARTNER", "A_BusinessPartner('{{sap_bp_org_id}}')"]
+        }
+      }
+    },
+    {
+      "name": "25 · [SAP] Get BP Persona ETag",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => { pm.response.to.have.status(200); });",
+              "const etag = pm.response.headers.get('etag');",
+              "pm.test('ETag received', () => {",
+              "    pm.expect(etag).to.be.a('string');",
+              "    pm.environment.set('sap_bp_persona_etag', etag);",
+              "    console.log('✅ BP Persona ETag:', etag);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_BUSINESS_PARTNER/A_BusinessPartner('{{sap_bp_persona_id}}')",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_BUSINESS_PARTNER", "A_BusinessPartner('{{sap_bp_persona_id}}')"]
+        }
+      }
+    },
+    {
+      "name": "26 · [SAP] Update BP Persona (← HS Contact updated)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 204 No Content', () => {",
+              "    pm.response.to.have.status(204);",
+              "    console.log('✅ BP Persona PATCH successful (204)');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "PATCH",
+        "header": [
+          { "key": "x-csrf-token", "value": "{{SAP_CSRF_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Accept", "value": "application/json" },
+          { "key": "If-Match", "value": "{{sap_bp_persona_etag}}" },
+          { "key": "Cookie", "value": "{{SAP_COOKIES}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"SearchTerm1\": \"TESTINEZ-UPD\"\n}"
+        },
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_BUSINESS_PARTNER/A_BusinessPartner('{{sap_bp_persona_id}}')",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_BUSINESS_PARTNER", "A_BusinessPartner('{{sap_bp_persona_id}}')"]
+        }
+      }
+    },
+    {
+      "name": "27 · [SAP] Get SalesOrder ETag",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => { pm.response.to.have.status(200); });",
+              "const etag = pm.response.headers.get('etag');",
+              "pm.test('ETag received', () => {",
+              "    pm.expect(etag).to.be.a('string');",
+              "    pm.environment.set('sap_salesorder_etag', etag);",
+              "    console.log('✅ SalesOrder ETag:', etag);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_SALES_ORDER_SRV/A_SalesOrder('{{sap_salesorder_id}}')",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_SALES_ORDER_SRV", "A_SalesOrder('{{sap_salesorder_id}}')"]
+        }
+      }
+    },
+    {
+      "name": "28 · [SAP] Update SalesOrder (← HS Deal updated)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 204 No Content', () => {",
+              "    pm.response.to.have.status(204);",
+              "    console.log('✅ SalesOrder PATCH successful (204)');",
+              "    console.log('');",
+              "    console.log('🎉 ══════════════════════════════════════');",
+              "    console.log('🎉  ALL INTEGRATION TESTS COMPLETE!');",
+              "    console.log('🎉 ══════════════════════════════════════');",
+              "    console.log('');",
+              "    console.log('📋 IDs created:');",
+              "    console.log('   HS Company:', pm.environment.get('hs_companyId'));",
+              "    console.log('   HS Contact:', pm.environment.get('hs_contactId'));",
+              "    console.log('   HS Deal:', pm.environment.get('hs_dealId'));",
+              "    console.log('   SAP BP Org:', pm.environment.get('sap_bp_org_id'));",
+              "    console.log('   SAP BP Persona:', pm.environment.get('sap_bp_persona_id'));",
+              "    console.log('   SAP SalesOrder:', pm.environment.get('sap_salesorder_id'));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{SAP_USER}}" },
+            { "key": "password", "value": "{{SAP_PASS}}" }
+          ]
+        },
+        "method": "PATCH",
+        "header": [
+          { "key": "x-csrf-token", "value": "{{SAP_CSRF_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Accept", "value": "application/json" },
+          { "key": "If-Match", "value": "{{sap_salesorder_etag}}" },
+          { "key": "Cookie", "value": "{{SAP_COOKIES}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"PurchaseOrderByCustomer\": \"OC-TEST-2026-002\"\n}"
+        },
+        "url": {
+          "raw": "{{SAP_BASE_URL}}/API_SALES_ORDER_SRV/A_SalesOrder('{{sap_salesorder_id}}')",
+          "host": ["{{SAP_BASE_URL}}"],
+          "path": ["API_SALES_ORDER_SRV", "A_SalesOrder('{{sap_salesorder_id}}')"]
+        }
+      }
+    }
+  ]
+}

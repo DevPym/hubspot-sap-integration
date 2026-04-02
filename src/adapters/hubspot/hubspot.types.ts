@@ -185,6 +185,8 @@ export interface HubSpotDealProperties {
   dealname?: string;
   /** READ-ONLY desde SAP (TotalNetAmount calculado desde ítems) */
   amount?: string;
+  /** Descripción del deal → to_Text LongTextID='0002' en SAP */
+  description?: string;
   /** Fecha de cierre esperada (ISO 8601) */
   closedate?: string;
   deal_currency_code?: string;

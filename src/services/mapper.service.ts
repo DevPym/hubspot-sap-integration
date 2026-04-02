@@ -42,6 +42,8 @@ import type {
   SapBPEmail,
   SapSalesOrder,
   SapSalesOrderItem,
+  SapSalesOrderText,
+  SapSalesOrderPartner,
 } from '../adapters/sap/sap.types';
 
 import type {
@@ -750,9 +752,9 @@ export function companyToSapBP(
     BusinessPartnerCategory: '2',
     BusinessPartnerGrouping: SAP_CONSTANTS.BP_GROUPING,
     OrganizationBPName1: truncate(props.name, MAX_LENGTHS.ORGANIZATION_BP_NAME),
-    OrganizationBPName2: truncate(props.description, MAX_LENGTHS.ORGANIZATION_BP_NAME),
-    OrganizationBPName3: truncate(props.razon_social, MAX_LENGTHS.ORGANIZATION_BP_NAME),
-    SearchTerm1: truncate(props.razon_social, MAX_LENGTHS.SEARCH_TERM),
+    OrganizationBPName2: truncate(props.razon_social, MAX_LENGTHS.ORGANIZATION_BP_NAME),
+    SearchTerm1: truncate(props.name, MAX_LENGTHS.SEARCH_TERM),
+    SearchTerm2: truncate(normalizeRut(props.rut_empresa), MAX_LENGTHS.SEARCH_TERM),
     OrganizationFoundationDate: yearToDate(props.founded_year),
     CorrespondenceLanguage: SAP_CONSTANTS.CORRESPONDENCE_LANGUAGE,
     BusinessPartnerIDByExtSystem: truncate(hubspotId, MAX_LENGTHS.EXTERNAL_ID),
@@ -805,13 +807,13 @@ export function companyToSapBPUpdate(props: Partial<HubSpotCompanyProperties>): 
 
   if (props.name !== undefined) {
     update.OrganizationBPName1 = truncate(props.name, MAX_LENGTHS.ORGANIZATION_BP_NAME);
-  }
-  if (props.description !== undefined) {
-    update.OrganizationBPName2 = truncate(props.description, MAX_LENGTHS.ORGANIZATION_BP_NAME);
+    update.SearchTerm1 = truncate(props.name, MAX_LENGTHS.SEARCH_TERM);
   }
   if (props.razon_social !== undefined) {
-    update.OrganizationBPName3 = truncate(props.razon_social, MAX_LENGTHS.ORGANIZATION_BP_NAME);
-    update.SearchTerm1 = truncate(props.razon_social, MAX_LENGTHS.SEARCH_TERM);
+    update.OrganizationBPName2 = truncate(props.razon_social, MAX_LENGTHS.ORGANIZATION_BP_NAME);
+  }
+  if (props.rut_empresa !== undefined) {
+    update.SearchTerm2 = truncate(normalizeRut(props.rut_empresa), MAX_LENGTHS.SEARCH_TERM);
   }
   if (props.founded_year !== undefined) {
     update.OrganizationFoundationDate = yearToDate(props.founded_year);
@@ -836,17 +838,16 @@ export function companyToSapBPUpdate(props: Partial<HubSpotCompanyProperties>): 
 export function dealToSalesOrder(
   props: HubSpotDealProperties,
   sapCompanyId: string,
+  sapContactBPId?: string,
 ): SapCreateSalesOrderPayload {
-  // PurchaseOrderByCustomer: priorizar orden_de_compra custom sobre dealname
+  // PurchaseOrderByCustomer: SOLO orden_de_compra (decisión confirmada P2)
   const purchaseOrder = truncate(
-    props.orden_de_compra_o_contratoo || props.dealname,
+    props.orden_de_compra_o_contratoo,
     MAX_LENGTHS.PURCHASE_ORDER,
   );
 
-  // RequestedDeliveryDate: priorizar fecha_de_entrega custom sobre closedate
-  // Convertir de ISO (HubSpot) a /Date(epoch)/ (SAP OData v2)
-  const deliveryDateISO = props.fecha_de_entrega || props.closedate;
-  const deliveryDate = isoToSapDate(deliveryDateISO);
+  // RequestedDeliveryDate: SOLO fecha_de_entrega (decisión confirmada P3)
+  const deliveryDate = isoToSapDate(props.fecha_de_entrega);
 
   // Ítems: al menos un ítem con el material por defecto
   const items: Omit<SapSalesOrderItem, 'SalesOrder'>[] = [];
@@ -856,6 +857,21 @@ export function dealToSalesOrder(
     RequestedQuantity: props.cuanto_es_la_cantidad_requerida_del_producto_ || '1',
     RequestedQuantityUnit: SAP_CONSTANTS.MATERIAL_UNIT,
   });
+
+  // to_Text: dealname va como nota de header (decisión confirmada P2)
+  const textEntries: { Language: string; LongTextID: string; LongText: string }[] = [];
+  if (props.dealname) {
+    textEntries.push({ Language: 'ES', LongTextID: '0001', LongText: props.dealname });
+  }
+  if (props.description) {
+    textEntries.push({ Language: 'ES', LongTextID: '0002', LongText: props.description });
+  }
+
+  // to_Partner: Contact Person AP (decisión confirmada P8)
+  const partnerEntries: { PartnerFunction: string; ContactPerson?: string }[] = [];
+  if (sapContactBPId) {
+    partnerEntries.push({ PartnerFunction: 'AP', ContactPerson: sapContactBPId });
+  }
 
   const payload: SapCreateSalesOrderPayload = {
     SalesOrderType: SAP_CONSTANTS.SALES_ORDER_TYPE,
@@ -868,6 +884,8 @@ export function dealToSalesOrder(
     RequestedDeliveryDate: deliveryDate,
     CustomerPaymentTerms: paymentTermsToSap(props.condicion_de_pago),
     to_Item: { results: items },
+    to_Text: textEntries.length > 0 ? { results: textEntries } : undefined,
+    to_Partner: partnerEntries.length > 0 ? { results: partnerEntries } : undefined,
   };
 
   return cleanNulls(payload);
@@ -884,14 +902,14 @@ export function dealToSalesOrderUpdate(
 ): SapUpdateSalesOrderPayload {
   const update: SapUpdateSalesOrderPayload = {};
 
-  const purchaseOrder = props.orden_de_compra_o_contratoo || props.dealname;
-  if (purchaseOrder !== undefined) {
-    update.PurchaseOrderByCustomer = truncate(purchaseOrder, MAX_LENGTHS.PURCHASE_ORDER);
+  // Solo orden_de_compra → PurchaseOrderByCustomer (decisión confirmada P2)
+  if (props.orden_de_compra_o_contratoo !== undefined) {
+    update.PurchaseOrderByCustomer = truncate(props.orden_de_compra_o_contratoo, MAX_LENGTHS.PURCHASE_ORDER);
   }
 
-  const deliveryDateISO = props.fecha_de_entrega || props.closedate;
-  if (deliveryDateISO !== undefined) {
-    update.RequestedDeliveryDate = isoToSapDate(deliveryDateISO);
+  // Solo fecha_de_entrega → RequestedDeliveryDate (decisión confirmada P3)
+  if (props.fecha_de_entrega !== undefined) {
+    update.RequestedDeliveryDate = isoToSapDate(props.fecha_de_entrega);
   }
 
   if (props.deal_currency_code !== undefined) {
@@ -968,8 +986,7 @@ export function sapBPToCompanyUpdate(
   const props: Partial<HubSpotCompanyProperties> = {};
 
   if (bp.OrganizationBPName1) props.name = bp.OrganizationBPName1;
-  if (bp.OrganizationBPName2) props.description = bp.OrganizationBPName2;
-  if (bp.OrganizationBPName3) props.razon_social = bp.OrganizationBPName3;
+  if (bp.OrganizationBPName2) props.razon_social = bp.OrganizationBPName2;
   if (bp.OrganizationFoundationDate) {
     // Extraer solo el año de la fecha
     const year = bp.OrganizationFoundationDate.substring(0, 4);
@@ -1007,22 +1024,26 @@ export function salesOrderToDealUpdate(
 ): Partial<HubSpotDealProperties> {
   const props: Partial<HubSpotDealProperties> = {};
 
-  if (so.PurchaseOrderByCustomer) props.dealname = so.PurchaseOrderByCustomer;
+  // PurchaseOrderByCustomer → solo orden_de_compra (decisión confirmada P2)
+  if (so.PurchaseOrderByCustomer) props.orden_de_compra_o_contratoo = so.PurchaseOrderByCustomer;
+
+  // TotalNetAmount (READ-ONLY de SAP) → amount en HubSpot
   if (so.TotalNetAmount) props.amount = so.TotalNetAmount;
-  if (so.RequestedDeliveryDate) {
-    // Convertir /Date(epoch)/ de SAP a ISO para HubSpot
-    const iso = sapDateToISO(so.RequestedDeliveryDate);
-    if (iso) props.closedate = iso.split('T')[0]; // Solo fecha YYYY-MM-DD
-  }
-  if (so.TransactionCurrency) props.deal_currency_code = so.TransactionCurrency;
-  if (so.CustomerPaymentTerms) {
-    props.condicion_de_pago = paymentTermsToHubSpot(so.CustomerPaymentTerms) || so.CustomerPaymentTerms;
-  }
+
+  // RequestedDeliveryDate → solo fecha_de_entrega (decisión confirmada P3)
   if (so.RequestedDeliveryDate) {
     const iso = sapDateToISO(so.RequestedDeliveryDate);
     if (iso) props.fecha_de_entrega = iso.split('T')[0];
   }
-  if (so.PurchaseOrderByCustomer) props.orden_de_compra_o_contratoo = so.PurchaseOrderByCustomer;
+
+  if (so.TransactionCurrency) props.deal_currency_code = so.TransactionCurrency;
+  if (so.CustomerPaymentTerms) {
+    props.condicion_de_pago = paymentTermsToHubSpot(so.CustomerPaymentTerms) || so.CustomerPaymentTerms;
+  }
+
+  // to_Text LongTextID='0001' → dealname (decisión confirmada P2)
+  const headerText = so.to_Text?.results?.find(t => t.LongTextID === '0001');
+  if (headerText?.LongText) props.dealname = headerText.LongText;
 
   // Cantidad del primer ítem
   if (so.to_Item?.results?.[0]?.RequestedQuantity) {
