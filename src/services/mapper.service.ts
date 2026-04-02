@@ -221,7 +221,7 @@ const REGION_MAP_CL: Record<string, string> = {
   // Valparaíso (V)
   'valparaiso': 'VS', 'valparaíso': 'VS', 'vs': 'VS', 'v': 'VS',
   // Metropolitana (RM)
-  'metropolitana': 'RM', 'region metropolitana': 'RM', 'santiago': 'RM', 'rm': 'RM', 'xiii': 'RM',
+  'metropolitana': 'RM', 'region metropolitana': 'RM', 'región metropolitana': 'RM', 'santiago': 'RM', 'rm': 'RM', 'xiii': 'RM',
   // O'Higgins (VI)
   'ohiggins': 'LI', "o'higgins": 'LI', 'li': 'LI', 'vi': 'LI', 'rancagua': 'LI',
   // Maule (VII)
@@ -718,6 +718,15 @@ export function companyToSapBP(
   props: HubSpotCompanyProperties,
   hubspotId: string,
 ): SapCreateBPPayload {
+  // Validación: SAP requiere OrganizationBPName1 (error R11/401 si falta)
+  if (!props.name?.trim()) {
+    throw new Error(
+      `[mapper] Company ${hubspotId}: campo 'name' es requerido para crear BP Organización en SAP. ` +
+      `HubSpot puede auto-crear Companies sin nombre desde el campo 'company' de un Contact. ` +
+      `Asegúrate de que la Company tenga un nombre válido antes de sincronizar.`
+    );
+  }
+
   const phone = parsePhone(props.phone);
 
   const addressPhones: SapBPPhone[] = [];
@@ -858,14 +867,10 @@ export function dealToSalesOrder(
     RequestedQuantityUnit: SAP_CONSTANTS.MATERIAL_UNIT,
   });
 
-  // to_Text: dealname va como nota de header (decisión confirmada P2)
-  const textEntries: { Language: string; LongTextID: string; LongText: string }[] = [];
-  if (props.dealname) {
-    textEntries.push({ Language: 'ES', LongTextID: '0001', LongText: props.dealname });
-  }
-  if (props.description) {
-    textEntries.push({ Language: 'ES', LongTextID: '0002', LongText: props.description });
-  }
+  // to_Text: DESHABILITADO — SAP error "Text ID 0001 for text object VBBK is not defined"
+  // Los LongTextIDs para SalesOrder header no están configurados en el customizing de Química Sur.
+  // TODO: Consultar con equipo SAP qué Text IDs están habilitados para VBBK, luego rehabilitar.
+  // dealname y description no se sincronizan a SAP hasta que se resuelva esto.
 
   // to_Partner: Contact Person AP (decisión confirmada P8)
   const partnerEntries: { PartnerFunction: string; ContactPerson?: string }[] = [];
@@ -884,7 +889,7 @@ export function dealToSalesOrder(
     RequestedDeliveryDate: deliveryDate,
     CustomerPaymentTerms: paymentTermsToSap(props.condicion_de_pago),
     to_Item: { results: items },
-    to_Text: textEntries.length > 0 ? { results: textEntries } : undefined,
+    // to_Text: DESHABILITADO (ver nota arriba)
     to_Partner: partnerEntries.length > 0 ? { results: partnerEntries } : undefined,
   };
 
